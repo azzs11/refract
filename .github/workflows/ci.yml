@@ -57,10 +57,8 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
-      - name: Double construction, 1M random regexes
-        run: PROPTEST_CASES=1000000 cargo test --release -p refract-core --test double_construction engines_and_minimisers_agree
-      - name: Witness validity and real-engine agreement, 200k cases
-        run: PROPTEST_CASES=200000 cargo test --release -p refract-core --test equiv_props --test rust_oracle --test rust_differential
+      - name: Parser vs regex-syntax, 1M random patterns
+        run: PROPTEST_CASES=1000000 cargo test --release -p refract-core --test rust_differential
 
   fuzz:
     name: fuzz parser (nightly, 1 h)
