@@ -1,0 +1,25 @@
+[package]
+name = "refract-cli"
+description = "Refract command-line interface"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[[bin]]
+name = "refract"
+path = "src/main.rs"
+
+[lints]
+workspace = true
+
+[dependencies]
+anyhow = "1.0.105"
+clap = { version = "4.6.9", features = ["derive"] }
+refract-core = { version = "0.1.0", path = "../refract-core" }
+regex = "1.13.2"
+serde_json = "1.0.154"
+
+[dev-dependencies]
+insta = "1.49.0"
