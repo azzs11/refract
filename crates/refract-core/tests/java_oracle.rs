@@ -33,18 +33,107 @@ fn with_java<T>(f: impl FnOnce(&mut Oracle) -> T) -> Option<T> {
 }
 
 const TOKENS: &[&str] = &[
-    "a", "b", "é", "k", "K", "\u{212A}", "s", "ſ", "1", "\u{301}", ".", "^", "$", "|", "(", ")",
-    "(?:", "(?i)", "(?iu)", "(?m)", "(?s)", "(?d)", "(?x)", "(?i:", "(?-i:", "(?<n>", "\\k<n>",
-    "(?=", "(?!", "(?<=", "(?<!", "(?>", "*", "+", "?", "*?", "*+", "{", "}", "{2}", "{,2}",
-    "{1,3}", "{2,}", "{3,1}", ",", "[", "]", "[^", "-", "&&", "\\", "\\d", "\\D", "\\w", "\\W",
-    "\\s", "\\S", "\\h", "\\v", "\\R", "\\b", "\\B", "\\A", "\\z", "\\Z", "\\G", "\\1", "\\0",
-    "\\01", "\\x41", "\\x{e9}", "\\u00e9", "\\Q", "\\E", "\\cA", "\\e", "\\n", "\\.", "\\-", "\\_",
-    "\\q", " ", "#", "\n",
+    "a",
+    "b",
+    "é",
+    "k",
+    "K",
+    "\u{212A}",
+    "s",
+    "ſ",
+    "1",
+    "\u{301}",
+    ".",
+    "^",
+    "$",
+    "|",
+    "(",
+    ")",
+    "(?:",
+    "(?i)",
+    "(?iu)",
+    "(?m)",
+    "(?s)",
+    "(?d)",
+    "(?x)",
+    "(?i:",
+    "(?-i:",
+    "(?<n>",
+    "\\k<n>",
+    "(?=",
+    "(?!",
+    "(?<=",
+    "(?<!",
+    "(?>",
+    "*",
+    "+",
+    "?",
+    "*?",
+    "*+",
+    "{",
+    "}",
+    "{2}",
+    "{,2}",
+    "{1,3}",
+    "{2,}",
+    "{3,1}",
+    ",",
+    "[",
+    "]",
+    "[^",
+    "-",
+    "&&",
+    "\\",
+    "\\d",
+    "\\D",
+    "\\w",
+    "\\W",
+    "\\s",
+    "\\S",
+    "\\h",
+    "\\v",
+    "\\R",
+    "\\b",
+    "\\B",
+    "\\A",
+    "\\z",
+    "\\Z",
+    "\\G",
+    "\\1",
+    "\\0",
+    "\\01",
+    "\\x41",
+    "\\x{e9}",
+    "\\u00e9",
+    "\\Q",
+    "\\E",
+    "\\cA",
+    "\\e",
+    "\\n",
+    "\\.",
+    "\\-",
+    "\\_",
+    "\\q",
+    " ",
+    "#",
+    "\n",
+    "\\pL",
+    "\\p{Lu}",
+    "\\P{L}",
+    "\\p{IsLatin}",
+    "\\p{InGreek}",
+    "\\p{IsAlphabetic}",
+    "\\p{javaLowerCase}",
+    "\\p{Lower}",
+    "\\p{sc=Grek}",
+    "\\p{blk=Basic Latin}",
+    "\\p{gc=Nd}",
+    "\\p{Bogus}",
 ];
 
 const INPUT_CHARS: &[char] = &[
     'a', 'b', 'A', 'k', 'K', '\u{212A}', 'é', 'É', 's', 'S', 'ſ', '1', '\n', '\r', '\u{85}',
-    '\u{2028}', ' ', '\t', '\u{A0}', '\x0B', '_', '-', '\u{301}', 'λ', '\x01',
+    '\u{2028}', ' ', '\t', '\u{A0}', '\x0B', '_', '-', '\u{301}', 'λ', '\x01', '😀', '𝒜',
 ];
 
 fn pattern() -> impl Strategy<Value = String> {
@@ -97,6 +186,9 @@ proptest! {
         let budget = Budget::small().start();
         let hay_refs: Vec<&str> = hay.iter().map(String::as_str).collect();
         for (op, oop) in [(Op::FullMatch, OOp::Full), (Op::Search, OOp::Search)] {
+            // The interpreter (ADR-0011) must agree with the engine on every pattern, including
+            // the non-regular ones the automata refuse.
+            interp_check(&ir, op, oop, &hay)?;
             let Ok(re) = lower(&ir, op, &budget) else { continue };
             let alpha = alphabet_for(&[&re]);
             let Ok(m) = dfa(&re, &alpha, Engine::Derivative, &budget) else { continue };
@@ -241,4 +333,43 @@ fn known_cases() {
         failures.len(),
         failures.join("\n")
     );
+}
+
+/// The interpreter's verdicts versus the real engine on the same haystacks.
+fn interp_check(
+    ir: &refract_core::Regex,
+    op: Op,
+    oop: OOp,
+    hay: &[String],
+) -> Result<(), TestCaseError> {
+    let mut mine = Vec::new();
+    for h in hay {
+        match refract_core::interp::is_match(ir, op, h, 200_000) {
+            Ok(b) => mine.push(Some(b)),
+            Err(_) => mine.push(None), // step limit: no prediction
+        }
+    }
+    let refs: Vec<&str> = hay.iter().map(String::as_str).collect();
+    let Some(out) = with_java(|jv| jv.run(&ir.pattern, oop, &refs)) else {
+        return Ok(());
+    };
+    let Outcome::Matched(real) = out.map_err(|e| TestCaseError::fail(e.to_string()))? else {
+        return Err(TestCaseError::fail(format!(
+            "we parsed {:?} but the engine rejects it",
+            ir.pattern
+        )));
+    };
+    for ((h, want), got) in hay.iter().zip(real).zip(mine) {
+        if let Some(got) = got {
+            prop_assert_eq!(
+                got,
+                want,
+                "interpreter {} of {:?} on {} vs engine",
+                op.name(),
+                ir.pattern,
+                escape(h)
+            );
+        }
+    }
+    Ok(())
 }

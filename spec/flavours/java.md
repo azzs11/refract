@@ -40,7 +40,22 @@ the parser is a port of its `sequence`, `atom`, `closure`, `escape`, `clazz`, `r
   valid; `(?#...)`, `(?P<..>)` are errors.
 - `(?x)` skips whitespace and `#` comments everywhere, including inside classes.
 
+## `\p{..}`
+
+Resolved like `Pattern.family()` + `CharPredicates`: `name=value` (`sc`/`script`, `blk`/`block`,
+`gc`/`general_category`), `In…` blocks, `Is…` (Unicode property, then `forProperty`, then script),
+else `forProperty` (exact case). Sets, `(?i)` variants and every accepted block/script spelling are
+generated inside the JDK (`tools/GenJavaProps.java`, reading the JDK's own alias maps).
+
+## Search over code units
+
+When no predicate is outside the JDK's `BmpCharPredicate`s and the pattern text has no astral
+characters, `find()` advances one UTF-16 unit at a time and so also tries positions inside
+surrogate pairs (`\B` matches there). Refract ports `hasSupplementary` and models this. `\b`'s
+base-character scan walks UTF-16 units and stops at an astral base (docs/findings.md).
+
 ## Not analysed yet (reported as unsupported)
 
-`\p{..}`, `\X`, `\b{g}`, `\N{..}`, `(?c)` canonical equivalence, `(?U)` Unicode character
-classes, and (as for every flavour) backreferences, atomic groups and possessive quantifiers.
+`\X`, `\b{g}`, `\N{..}`, `(?c)` canonical equivalence and `(?U)` Unicode character classes.
+Back-references and atomic/possessive bodies that are not prefix-free are handled by the bounded
+check (ADR-0011).

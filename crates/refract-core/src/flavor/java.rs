@@ -42,11 +42,11 @@ const UNIX_LINES: u32 = 0x01;
 const UNICODE_CHARACTER_CLASS: u32 = 0x100;
 const NEST_LIMIT: u32 = 400;
 
-fn upper(c: u32) -> u32 {
+pub(crate) fn upper(c: u32) -> u32 {
     lookup(t::TO_UPPER, c)
 }
 
-fn lower(c: u32) -> u32 {
+pub(crate) fn lower(c: u32) -> u32 {
     lookup(t::TO_LOWER, c)
 }
 
@@ -138,6 +138,9 @@ struct Parser<'a> {
     byte_of: Option<Vec<usize>>,
     deferred: Option<Error>,
     depth: u32,
+    /// Pattern.hasSupplementary: set by any non-BMP character predicate (and astral pattern
+    /// text). When it stays false, `find()` advances one UTF-16 unit at a time (`Start`).
+    has_supp: std::cell::Cell<bool>,
 }
 
 pub fn parse(pattern: &str) -> Result<Regex> {
@@ -160,6 +163,7 @@ pub fn parse(pattern: &str) -> Result<Regex> {
         byte_of,
         deferred: None,
         depth: 0,
+        has_supp: std::cell::Cell::new(pattern.chars().any(|c| c as u32 > 0xFFFF)),
     };
     let root = p.expr()?;
     if p.pattern_length != p.cursor {
@@ -173,13 +177,26 @@ pub fn parse(pattern: &str) -> Result<Regex> {
     if let Some(e) = p.deferred {
         return Err(e);
     }
+    // A root that starts with `Begin` (`^`, `\A`) is matched at 0 only; otherwise the search
+    // loop is `Start` (per UTF-16 unit) unless the pattern has supplementary predicates.
+    let begins = match &root.kind {
+        NodeKind::Assert(Assertion::TextStart) => true,
+        NodeKind::Concat(xs) => matches!(
+            xs.first().map(|n| &n.kind),
+            Some(NodeKind::Assert(Assertion::TextStart))
+        ),
+        _ => false,
+    };
     Ok(Regex {
         flavor: Flavor::Java,
         pattern: pattern.to_string(),
         root,
         captures: p.captures,
         domain: Domain::Scalars,
-        quirks: Quirks::default(),
+        quirks: Quirks {
+            mid_pair_search: !p.has_supp.get() && !begins,
+            ..Quirks::default()
+        },
     })
 }
 
@@ -240,7 +257,7 @@ fn flatten(n: &Node, out: &mut Vec<E>) {
                 })
                 .collect(),
         )),
-        NodeKind::Backref(_) | NodeKind::Conditional(_) => out.push(E::Unbounded),
+        NodeKind::Backref(..) | NodeKind::Conditional(_) => out.push(E::Unbounded),
         NodeKind::Repeat(r) => {
             let mut atom = Vec::new();
             flatten(&r.sub, &mut atom);
@@ -380,6 +397,61 @@ fn study_lookbehinds(n: &mut Node) -> Result<()> {
         _ => {}
     }
     Ok(())
+}
+
+/// `family()` name resolution (Pattern + CharPredicates, jdk-25-ga) over tables measured on
+/// the JDK (`tables::java_props`). `Err` carries the JDK's message.
+fn java_family(name: &str, ci: bool) -> std::result::Result<CharSet, String> {
+    use crate::tables::java_props as p;
+    let set = |i: usize| CharSet::from_ranges(p::SETS[i].iter().copied());
+    let property = |n: &str| {
+        p::PROPERTY
+            .iter()
+            .find(|(k, ..)| *k == n)
+            .map(|&(_, a, b)| set(if ci { b } else { a }))
+    };
+    let unicode_property = |n: &str| {
+        let up = n.to_uppercase();
+        p::UNICODE_PROPERTY
+            .iter()
+            .find(|(k, ..)| *k == up)
+            .map(|&(_, a, b)| set(if ci { b } else { a }))
+    };
+    let script = |n: &str| {
+        let up = n.to_uppercase();
+        p::SCRIPT
+            .iter()
+            .find(|(k, _)| *k == up)
+            .map(|&(_, i)| set(i))
+    };
+    let block = |n: &str| {
+        let up = n.to_uppercase();
+        p::BLOCK
+            .iter()
+            .find(|(k, _)| *k == up)
+            .map(|&(_, i)| set(i))
+    };
+    if let Some((key, value)) = name.split_once('=') {
+        let k = key.to_lowercase();
+        let found = match k.as_str() {
+            "sc" | "script" => script(value),
+            "blk" | "block" => block(value),
+            "gc" | "general_category" => property(value),
+            _ => None,
+        };
+        return found
+            .ok_or_else(|| format!("Unknown Unicode property {{name=<{k}>, value=<{value}>}}"));
+    }
+    let found = if let Some(rest) = name.strip_prefix("In") {
+        block(rest)
+    } else if let Some(rest) = name.strip_prefix("Is") {
+        unicode_property(rest)
+            .or_else(|| property(rest))
+            .or_else(|| script(rest))
+    } else {
+        property(name)
+    };
+    found.ok_or_else(|| format!("Unknown character property name {{{name}}}"))
 }
 
 /// `RemoveQEQuoting`: rewrites `\Q..\E` into escaped literals. Returns whether it changed.
@@ -721,6 +793,34 @@ impl<'a> Parser<'a> {
         s.union(&points(extra))
     }
 
+    /// Records a character predicate; a non-BMP one sets `hasSupplementary`.
+    fn note_bmp(&self, bmp: bool) {
+        if !bmp {
+            self.has_supp.set(true);
+        }
+    }
+
+    /// Is `single(ch)` a `BmpCharPredicate`? (`SingleU` and `SingleS` are not.)
+    fn single_is_bmp(&self, ch: u32) -> bool {
+        if self.has(CASE_INSENSITIVE) && self.has(UNICODE_CASE) {
+            let up = upper(ch);
+            if up != lower(up) {
+                return false;
+            }
+        }
+        ch <= 0xFFFF && !(0xD800..=0xDFFF).contains(&ch)
+    }
+
+    fn backref_case(&self) -> crate::ir::BackrefCase {
+        if self.has(CASE_INSENSITIVE) {
+            crate::ir::BackrefCase::Java {
+                unicode: self.has(UNICODE_CASE),
+            }
+        } else {
+            crate::ir::BackrefCase::Exact
+        }
+    }
+
     fn word(&self) -> CharSet {
         crate::unicode::posix_class("word").unwrap_or_default()
     }
@@ -796,6 +896,7 @@ impl<'a> Parser<'a> {
                 }
                 0x2E => {
                     self.next();
+                    self.note_bmp(false); // DOT / ALL / UNIXDOT are CharPredicates
                     Node::new(NodeKind::Class(self.dot()), self.span_from(at))
                 }
                 0x7C | 0x29 => break,
@@ -875,6 +976,7 @@ impl<'a> Parser<'a> {
         }
         let span = self.span_from(start);
         if buf.len() == 1 {
+            self.note_bmp(self.single_is_bmp(buf[0]));
             return Ok(self.set_node(self.single(buf[0]), buf[0], span));
         }
         let nodes: Vec<Node> = buf
@@ -1011,7 +1113,10 @@ impl<'a> Parser<'a> {
             n = m;
             self.read();
         }
-        Node::new(NodeKind::Backref(n), self.span_from(start))
+        Node::new(
+            NodeKind::Backref(n, self.backref_case()),
+            self.span_from(start),
+        )
     }
 
     /// `escape(inclass, create, isrange)`.
@@ -1159,7 +1264,10 @@ impl<'a> Parser<'a> {
                     );
                 };
                 if create {
-                    Esc::Node(Node::new(NodeKind::Backref(n), self.span_from(start)))
+                    Esc::Node(Node::new(
+                        NodeKind::Backref(n, self.backref_case()),
+                        self.span_from(start),
+                    ))
                 } else {
                     Esc::None
                 }
@@ -1188,6 +1296,10 @@ impl<'a> Parser<'a> {
                 } else {
                     base
                 };
+                if create {
+                    // Negations (and (?U) classes) are CharPredicates; the rest are BMP.
+                    self.note_bmp(c.is_ascii_lowercase() && !unicode_cc);
+                }
                 pred(self, set, create)
             }
             'N' => {
@@ -1306,15 +1418,17 @@ impl<'a> Parser<'a> {
     }
 
     /// At `p`/`P` (cursor on that letter): `family()` — not analysed, but syntax-checked.
-    fn family_after_p(&mut self, _complement: bool) -> Result<CharSet> {
+    fn family_after_p(&mut self, complement: bool) -> Result<CharSet> {
         let ch = self.next();
         let single = ch != '{' as u32;
         if single {
             self.unread();
         }
         self.next();
-        if single {
+        let name: String = if single {
+            let c = self.at(self.cursor);
             self.read();
+            char::from_u32(c).map(String::from).unwrap_or_default()
         } else {
             let i = self.cursor;
             loop {
@@ -1329,9 +1443,32 @@ impl<'a> Parser<'a> {
             if i + 1 >= self.cursor {
                 return Err(self.error("Empty character family"));
             }
+            self.temp[i..self.cursor - 1]
+                .iter()
+                .filter_map(|&c| char::from_u32(c))
+                .collect()
+        };
+        if self.has(UNICODE_CHARACTER_CLASS) {
+            self.defer("(?U) Unicode character classes are not analysed yet");
         }
-        self.defer("\\p{..} Unicode properties need Java's property tables (not bundled yet)");
-        Ok(CharSet::empty())
+        let set = java_family(&name, self.has(CASE_INSENSITIVE)).map_err(|m| self.error(&m))?;
+        // Only the ASCII ranges / ctypes of forProperty are BmpCharPredicates; `\P` always sets
+        // hasSupplementary.
+        const BMP_PROPS: &[&str] = &[
+            "L1", "ASCII", "Digit", "Print", "Alnum", "Alpha", "Blank", "Cntrl", "Graph", "Punct",
+            "Space", "XDigit", "Lower", "Upper",
+        ];
+        let plain = name
+            .strip_prefix("gc=")
+            .or_else(|| name.strip_prefix("general_category="))
+            .unwrap_or(&name);
+        self.note_bmp(
+            !complement
+                && !name.starts_with("Is")
+                && !name.starts_with("In")
+                && BMP_PROPS.contains(&plain),
+        );
+        Ok(if complement { set.complement() } else { set })
     }
 
     /// `groupname(ch)`: `[A-Za-z][A-Za-z0-9]*` then `>`.
@@ -1446,6 +1583,7 @@ impl<'a> Parser<'a> {
                         Some(p) => p,
                     };
                     if is_neg {
+                        self.note_bmp(false);
                         result = result.complement();
                     }
                     return Ok(result);
@@ -1504,6 +1642,9 @@ impl<'a> Parser<'a> {
                 if m == u32::MAX || m < ch {
                     return Err(self.error("Illegal character range"));
                 }
+                // CIRange / CIRangeU and ranges reaching surrogates or beyond are CharPredicates.
+                let plain_bmp = m < 0xD800 || (ch > 0xDFFF && m <= 0xFFFF);
+                self.note_bmp(!self.has(CASE_INSENSITIVE) && plain_bmp);
                 return Ok((self.range_set(ch, m), false));
             }
         }
@@ -1518,7 +1659,11 @@ impl<'a> Parser<'a> {
                 ch,
                 0xFF | 0xB5 | 0x49 | 0x69 | 0x53 | 0x73 | 0x4B | 0x6B | 0xC5 | 0xE5
             );
-        (set, ch < 256 && !exception)
+        let bits = ch < 256 && !exception;
+        if !bits {
+            self.note_bmp(self.single_is_bmp(ch));
+        }
+        (set, bits)
     }
 
     // ------------------------------------------------------------- groups
