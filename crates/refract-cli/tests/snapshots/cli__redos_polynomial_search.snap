@@ -1,0 +1,15 @@
+---
+source: crates/refract-cli/tests/cli.rs
+expression: out
+---
+pattern    \s+$
+written    python
+operation  search
+ambiguity  polynomial O(n^2): 2 overlapping loops in sequence: each split of the pumped part is tried
+attack     "" + "  "×n + "a"
+
+engine     predicted              measured                   status
+python     polynomial O(n^2)      -                          predicted (not measured)
+java       polynomial O(n^2)      -                          predicted (not measured)
+
+Static prediction only; run without --no-measure to time it on the engines.

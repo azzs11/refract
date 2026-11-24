@@ -128,3 +128,56 @@ fn dfa_table() {
     assert_eq!(code, 0);
     insta::assert_snapshot!(out);
 }
+
+#[test]
+fn redos_predicts_per_engine() {
+    let (code, out) = refract(&[
+        "redos",
+        "--no-measure",
+        "--engines",
+        "python,js,js-linear,java,go,rust",
+        "^(a+)+$",
+    ]);
+    assert_eq!(code, 0, "{out}");
+    insta::assert_snapshot!(out);
+}
+
+#[test]
+fn redos_polynomial_search() {
+    let (code, out) = refract(&[
+        "redos",
+        "--no-measure",
+        "--op",
+        "search",
+        "--engines",
+        "python,java",
+        r"\s+$",
+    ]);
+    assert_eq!(code, 0, "{out}");
+    insta::assert_snapshot!(out);
+}
+
+#[test]
+fn redos_safe_pattern() {
+    let (code, out) = refract(&[
+        "redos",
+        "--no-measure",
+        "--engines",
+        "python",
+        "^[a-z]+@[a-z]+\\.com$",
+    ]);
+    assert_eq!(code, 0, "{out}");
+    assert!(out.contains("no ambiguous loop"), "{out}");
+}
+
+/// Measured on CPython when it is installed: the exponential prediction is confirmed.
+#[test]
+fn redos_confirmed_on_python() {
+    let (code, out) = refract(&["redos", "--engines", "python", "--timeout", "2", "^(a+)+$"]);
+    if out.contains("unavailable") {
+        eprintln!("skipping: no python engine");
+        return;
+    }
+    assert_eq!(code, 1, "{out}");
+    assert!(out.contains("confirmed"), "{out}");
+}

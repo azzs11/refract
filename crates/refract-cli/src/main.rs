@@ -10,6 +10,7 @@ use std::process::ExitCode;
 
 mod commands;
 mod oracle;
+mod redos;
 
 #[derive(Parser)]
 #[command(
@@ -94,6 +95,37 @@ enum Command {
         max_states: Option<usize>,
         pattern: String,
     },
+    /// ReDoS lab: predict worst-case backtracking growth per engine (linear, polynomial,
+    /// exponential) with an attack string, then measure it on the real engines.
+    ///
+    /// Exit 1 when some engine is confirmed super-linear, 3 when an engine contradicts the model.
+    Redos {
+        /// The flavour the pattern was written for.
+        #[arg(long, short = 'f', default_value = "python")]
+        from: Flavor,
+        /// Engines (comma-separated); js-linear is V8 with its linear fallback enabled.
+        #[arg(
+            long,
+            value_delimiter = ',',
+            default_value = "python,js,js-linear,java,go,rust"
+        )]
+        engines: Vec<redos::Target>,
+        #[arg(long, default_value = "full")]
+        op: Op,
+        /// Per-measurement timeout in seconds.
+        #[arg(long, default_value_t = 3.0)]
+        timeout: f64,
+        /// Static prediction only.
+        #[arg(long)]
+        no_measure: bool,
+        /// Measure this attack instead of the predicted one:
+        /// '{"prefix": "", "pumps": ["a"], "suffix": "!"}'.
+        #[arg(long, value_parser = redos::parse_attack)]
+        attack: Option<refract_core::redos::Attack>,
+        #[arg(long)]
+        json: bool,
+        pattern: String,
+    },
     /// List flavours and their semantics profiles.
     Flavors,
 }
@@ -148,6 +180,25 @@ fn run(cli: Cli) -> Result<ExitCode> {
             max_states,
             pattern,
         } => commands::dfa(flavor, &pattern, op, engine, dot, max_states),
+        Command::Redos {
+            from,
+            engines,
+            op,
+            timeout,
+            no_measure,
+            attack,
+            json,
+            pattern,
+        } => redos::redos(
+            from,
+            &pattern,
+            &engines,
+            op,
+            std::time::Duration::from_secs_f64(timeout.max(0.05)),
+            no_measure,
+            attack,
+            json,
+        ),
         Command::Flavors => commands::flavors(),
     }
 }

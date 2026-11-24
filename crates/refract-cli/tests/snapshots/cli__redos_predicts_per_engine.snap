@@ -1,0 +1,19 @@
+---
+source: crates/refract-cli/tests/cli.rs
+expression: out
+---
+pattern    ^(a+)+$
+written    python
+operation  full-match
+ambiguity  exponential (at 2..4): two different paths read the same pumped input and meet again (overlapping alternatives in a loop)
+attack     "aa" + "aa"×n + "b"
+
+engine     predicted              measured                   status
+python     exponential            -                          predicted (not measured)
+js         exponential            -                          predicted (not measured)
+js-linear  linear                 -                          predicted (not measured)
+java       polynomial O(n^2)      -                          predicted (not measured)
+go         linear                 -                          predicted (not measured)
+rust       linear                 -                          predicted (not measured)
+
+Static prediction only; run without --no-measure to time it on the engines.
