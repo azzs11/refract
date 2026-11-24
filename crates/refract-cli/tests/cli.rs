@@ -88,13 +88,27 @@ fn unsupported_is_honest() {
 /// Cross-engine report, Python source vs Rust (in-process), when python3 is installed.
 #[test]
 fn refract_python_vs_rust() {
-    if std::process::Command::new("python3").arg("-V").output().is_err() {
+    if std::process::Command::new("python3")
+        .arg("-V")
+        .output()
+        .is_err()
+    {
         eprintln!("skipping: python3 not available");
         return;
     }
-    let (code, out) = refract(&["refract", "--from", "python", "--to", "rust", r"^\w+@\w+\.com$"]);
+    let (code, out) = refract(&[
+        "refract",
+        "--from",
+        "python",
+        "--to",
+        "rust",
+        r"^\w+@\w+\.com$",
+    ]);
     assert_eq!(code, 1, "{out}");
-    assert!(out.contains("DIFFERS") && out.contains("confirmed"), "{out}");
+    assert!(
+        out.contains("DIFFERS") && out.contains("confirmed"),
+        "{out}"
+    );
     assert!(out.contains("\"a@².com\""), "{out}");
 }
 
