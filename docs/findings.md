@@ -41,3 +41,23 @@ behaviour rather than Refract bugs (plan §9, Gauntlet triage). Each entry has a
   low surrogate, which is neither a letter/digit nor a mark, and stops.
 - How Refract handles it: the base-character scan in Java's `\b` only passes BMP characters
   (`regular::java_word_boundary`, `interp::java_base_before`).
+
+## JDK: failed start positions of the outermost greedy group loop are remembered
+
+- Engine: JDK 25.0.5.1. Source: `Pattern.compile()` (jdk-25-ga) sets `Loop.posIndex` for the
+  greedy, unbounded quantified groups in `topClosureNodes` (closures inside another quantified
+  group or a look-behind are removed from that list) unless the pattern has a back-reference.
+- Effect, measured with doubling haystacks `a…a!` (full match, slope of log time vs log n):
+  `^(a|a)*$` 1.16, `^(a|aa)+$` 1.13, `^(a+)+$` 1.99, `^(\w+\s?)+$` 1.94, `^(a+b?)+$` 2.00,
+  `^(?:a*a*)+b` 2.79, `^(?:a+){2,}$` 1.98; `^((a+)+)+$`, `^(a+)+?$` (lazy) and `^(a+)+\1?$`
+  stay exponential.
+- So the classic `(a+)+` is quadratic, not exponential, on the JDK: a loop costs n × (its body's
+  work from one start). Refract models exactly this (ADR-0012).
+
+## V8: the linear fallback does not cover every pattern
+
+- Engine: V8 14.6 (Node 26.13.1) with `--enable-experimental-regexp-engine-on-excessive-backtracks`.
+- `^(a+)+$` on `a×28 + "!"`: about 1 ms with the flag. Still exponential (about 9 s) with a
+  look-ahead (`^(?=a)(a+)+$`), a back-reference (`^(a+)+\1$`) or the `i` or `u` flag.
+- A look-ahead wrapper used for full-match semantics also switches the fallback off, so the
+  timing runner uses `^(?:p)$` for full matches without `m` (oracle/protocol.md).

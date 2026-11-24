@@ -21,6 +21,7 @@ pub mod flavor;
 pub mod interp;
 pub mod ir;
 pub mod minimize;
+pub mod redos;
 pub mod regular;
 pub mod tables;
 pub mod thompson;

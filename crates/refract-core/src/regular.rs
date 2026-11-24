@@ -360,6 +360,24 @@ pub fn lower(re: &Regex, op: Op, budget: &Budget) -> Result<Re> {
     Ok(lang)
 }
 
+/// The language "some match starts at one of the first `k + 1` positions": `Σ{0,k} · L · Σ*`,
+/// with the engine's context (`^`, `\b`, look-behind) seen correctly at each start. The ReDoS
+/// lab uses it to check that every early start of an attack fails.
+pub fn lower_starts_within(re: &Regex, k: u32, budget: &Budget) -> Result<Re> {
+    let lw = Lowerer {
+        budget,
+        next_var: std::cell::Cell::new(0),
+        sigma: match re.domain {
+            crate::ir::Domain::Scalars => CharSet::full(),
+            crate::ir::Domain::Utf16 => CharSet::units(),
+        },
+    };
+    Ok(Re::Concat(vec![
+        Re::Repeat(Box::new(lw.any()), 0, Some(k)),
+        lw.node(&re.root, lw.any_star())?,
+    ]))
+}
+
 /// Can the pattern match the empty string at a V8 mid-surrogate-pair position (see
 /// [`crate::ir::Quirks`])? There no character is visible on either side and the text-edge
 /// anchors are false, so only empty matches are possible.

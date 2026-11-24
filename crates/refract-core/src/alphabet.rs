@@ -37,6 +37,11 @@ impl BitSet {
         self.words.iter().all(|&w| w == 0)
     }
 
+    /// The raw 64-bit words (for fast multi-way intersection tests).
+    pub fn words(&self) -> &[u64] {
+        &self.words
+    }
+
     pub fn union_with(&mut self, other: &BitSet) {
         for (a, b) in self.words.iter_mut().zip(&other.words) {
             *a |= b;
@@ -207,6 +212,16 @@ impl Alphabet {
     pub fn readable_order(&self) -> &[usize] {
         &self.order
     }
+}
+
+/// The most readable scalar member of `set` (`None` when it has no scalar value, e.g. only
+/// surrogate code units).
+pub fn readable_char(set: &CharSet) -> Option<char> {
+    let scalars = set.intersect(&CharSet::full());
+    if scalars.is_empty() {
+        return None;
+    }
+    Some(best_char(&scalars).1)
 }
 
 fn best_char(class: &CharSet) -> (Readability, char) {
