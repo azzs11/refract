@@ -1,0 +1,13 @@
+---
+source: crates/refract-cli/tests/cli.rs
+expression: out
+---
+operation  search
+a          rust   ^abc
+b          rust   abc
+verdict    DIFFERENT
+witness    "aabc"  (length 4, shortest possible)
+           b matches it, a does not
+status     confirmed on the real engines
+           a: no match on rust regex 1.13 (in-process)
+           b: match on rust regex 1.13 (in-process)

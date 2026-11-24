@@ -1,0 +1,16 @@
+---
+source: crates/refract-cli/tests/cli.rs
+expression: out
+---
+operation  full-match
+states     5 (minimal, complete)
+minterms   3
+  c0   [^a-b]
+  c1   [a]
+  c2   [b]
+transitions (state: class -> target; * = accepting, > = start)
+  > 0   c0->1  c1->2  c2->0
+    1   c0->1  c1->1  c2->1
+    2   c0->1  c1->2  c2->3
+    3   c0->1  c1->2  c2->4
+   *4   c0->1  c1->2  c2->0

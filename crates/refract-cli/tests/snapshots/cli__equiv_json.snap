@@ -1,0 +1,30 @@
+---
+source: crates/refract-cli/tests/cli.rs
+expression: out
+---
+{
+  "a": {
+    "flavor": "rust",
+    "pattern": "(?s)."
+  },
+  "b": {
+    "flavor": "rust",
+    "pattern": "."
+  },
+  "engine": "Derivative",
+  "equivalent": false,
+  "minterms": 2,
+  "operation": "full-match",
+  "product_states": 3,
+  "replay": [
+    "a: match on rust regex 1.13 (in-process)",
+    "b: no match on rust regex 1.13 (in-process)"
+  ],
+  "status": "confirmed",
+  "witness": {
+    "accepted_by": "a",
+    "escaped": "\"\\n\"",
+    "length": 1,
+    "text": "\n"
+  }
+}

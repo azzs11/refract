@@ -1,0 +1,11 @@
+---
+source: crates/refract-cli/tests/cli.rs
+expression: out
+---
+concat  @0..7
+  lit 'a'  @0..1
+  repeat {0,inf}  @1..7
+    group #1  @1..6
+      alt  @2..5
+        lit 'b'  @2..3
+        lit 'c'  @4..5

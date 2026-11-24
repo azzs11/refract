@@ -1,0 +1,7 @@
+---
+source: crates/refract-cli/tests/cli.rs
+expression: out
+---
+syntax error: duplicate capture group name `n`
+  x(?P<n>a)(?P<n>b)
+               ^

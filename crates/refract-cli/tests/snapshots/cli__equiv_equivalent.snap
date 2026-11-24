@@ -1,0 +1,8 @@
+---
+source: crates/refract-cli/tests/cli.rs
+expression: out
+---
+operation  full-match
+a          rust   (a|b)*
+b          rust   (a*b*)*
+verdict    EQUIVALENT (proven: no distinguishing string; explored 4 product states over 3 minterms)
