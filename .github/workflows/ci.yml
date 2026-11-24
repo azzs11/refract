@@ -62,6 +62,21 @@ jobs:
       - name: Witness validity and real-engine agreement, 200k cases
         run: PROPTEST_CASES=200000 cargo test --release -p refract-core --test equiv_props --test rust_oracle --test rust_differential
 
+  oracles:
+    name: real-engine oracles (Python, JS, Go, Java)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Build pinned engine images
+        run: |
+          for e in python node go java; do docker build -q -t refract-oracle-$e oracle/$e; done
+      - name: Oracle suites (Docker engines)
+        env:
+          REFRACT_ORACLE: docker
+        run: cargo test --release -p refract-core --test python_oracle --test js_oracle --test go_oracle --test java_oracle
+
   fuzz:
     name: fuzz parser (nightly, 1 h)
     if: github.event_name == 'schedule'

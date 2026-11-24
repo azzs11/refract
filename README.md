@@ -7,10 +7,33 @@ a formal model of what it matches, and tells you — with the **shortest concret
 two patterns (or one pattern in two engines) disagree. Every "different" verdict is replayed on
 the real engine before it is called confirmed.
 
-> **Status: pre-alpha (phases P0–P2 of the plan).** One flavour (Rust `regex`) is implemented end
-> to end. JavaScript, Python `re`, Go/RE2 and Java arrive next (P3, the v0.5 milestone), followed
-> by the ReDoS lab, match spans, and the web app. Nothing is published yet; the crate will be
-> `refract-regex` (the name `refract` is taken on crates.io/PyPI/npm).
+> **Status: pre-alpha (phases P0–P3).** Five flavours are implemented end to end — **JavaScript
+> (V8), Python `re`, Go `regexp`, Java `java.util.regex`** and Rust `regex` — including
+> **look-around and assertions anywhere in the pattern**. Every verdict is replayed on the real
+> engines. Next: match spans and the remaining non-regular constructs (P4), then the ReDoS lab
+> (P5). Nothing is published yet; the crate will be `refract-regex`.
+
+One pattern, every engine — the shortest input where each disagrees, confirmed on the engines:
+
+```console
+$ refract refract --from python '^\w+@\w+\.com$'
+pattern    ^\w+@\w+\.com$
+written    python  (python 3.15.2)
+operation  full-match
+
+engine   verdict       shortest witness       python / engine        status
+js       DIFFERS       "a@ª.com"              match / no match       confirmed
+go       DIFFERS       "a@ª.com"              match / no match       confirmed
+java     DIFFERS       "a@ª.com"              match / no match       confirmed
+rust     DIFFERS       "a@².com"              match / no match       confirmed
+```
+
+Python's `\w` is `str.isalnum()`-based, so it matches U+00AA (ª) and U+00B2 (²); JS, Go and Java
+use ASCII `\w`, and Rust's UTS#18 `\w` excludes `²`. Under `--op search`, `abc$` shows the other
+classic: Python, Java and friends let `$` match before a final newline (`"abc\n"`), and Java also
+before `"\r"`.
+
+Two patterns, one verdict:
 
 ```console
 $ refract equiv --a 'rust:\d+' --b 'rust:[0-9]+'
@@ -34,7 +57,15 @@ $ cargo run -p refract-cli -- parse 'a(b|c)*'                    # print the IR
 $ cargo run -p refract-cli -- equiv --a 'a*' --b 'a+'             # witness: ""
 $ cargo run -p refract-cli -- equiv --op search --a '^abc' --b 'abc'   # witness: "aabc"
 $ cargo run -p refract-cli -- dfa '(a|b)*abb' --dot | dot -Tsvg > dfa.svg
+$ cargo run -p refract-cli -- refract --from js --op search '(?<=\$)\d+(?!\.)'   # look-around
 $ cargo run -p refract-cli -- flavors                             # semantics profiles
+```
+
+Real engines: Rust runs in-process; Python and JavaScript use `python3`/`node` when installed;
+Go and Java (and the others, with `REFRACT_ORACLE=docker`) run in pinned images:
+
+```console
+$ for e in python node go java; do docker build -t refract-oracle-$e oracle/$e; done
 ```
 
 Every verdict names its **operation**: `full` (the whole haystack must match — Python
@@ -47,50 +78,59 @@ Exit codes: `0` equivalent, `1` different (or pattern rejected), `2` usage/analy
 
 ## How verification works
 
-1. **Hand-written flavour front-ends** resolve everything flavour-specific — Unicode tables,
-   case folding, what `.` and `$` mean — into one IR over explicit character sets
-   ([spec/ir.md](spec/ir.md), [spec/flavours/rust.md](spec/flavours/rust.md)).
-2. **Two independent automaton engines** — symbolic Brzozowski derivatives (with intersection and
-   complement) and Thompson NFA + subset construction — must produce identical minimal DFAs, as
-   must two minimisers (Hopcroft, Brzozowski), all over a shared minterm alphabet.
-3. **Equivalence** is decided by breadth-first search of the product automaton; the witness is the
-   unique shortest, most readable distinguishing string ([spec/witness.md](spec/witness.md)).
-4. **Real-engine replay**: each witness is run on the real engine; verdicts are labelled
-   `confirmed`, `predicted` (no oracle yet) or `contradicted`.
-5. **Honest limits**: anything outside what is analysed (e.g. `\b` mid-pattern before P4) is
-   reported as unsupported with its location, never guessed; analyses have state and time budgets.
+1. **Front-ends that mirror each engine's own parser** (CPython's `_parser.py`, V8's Annex B and
+   Unicode grammars, Go's `regexp/syntax`, OpenJDK's `Pattern.java`, `regex-syntax`) resolve every
+   flavour-specific meaning — Unicode tables **measured from each engine**, case folding, `.`, `$` —
+   into one IR over explicit character sets ([spec/](spec/)).
+2. **Exact look-around**: look-ahead by continuation passing (`(?=s)` before `k` is `(s·Σ*) ∩ k`),
+   look-behind by a context carried in the automaton state; `\b`, `^`, `$` anywhere are built
+   from those with each engine's own sets ([ADR-0008](docs/adr/0008-lookaround-construction.md)).
+3. **Two independent automaton engines** — symbolic Brzozowski derivatives and Thompson NFA +
+   subset construction — and two minimisers must agree, over a shared minterm alphabet.
+4. **Equivalence** by breadth-first search of the product automaton; the witness is the unique
+   shortest, most readable distinguishing string ([spec/witness.md](spec/witness.md)).
+5. **Real-engine replay**: every witness and every rejection is run on the real engines; verdicts
+   are `proven`, `confirmed`, `predicted` (engine unavailable) or `contradicted` (a bug, exit 3).
+6. **Honest limits**: back-references, atomic groups, possessive quantifiers and a few
+   constructs (listed per flavour) are refused with their location, never guessed; JS without `u`
+   is analysed over BMP haystacks and says so.
 
 ## Evidence (from the test suite)
 
 | Check | Result | Where |
 |---|---|---|
-| Parser accepts exactly what `regex-syntax` accepts | 1,000,000 random patterns, 0 disagreements, plus ~110 edge cases | `tests/rust_differential.rs` |
-| Same language as `regex-syntax`'s own parse, decided by equivalence | 300,000 random patterns, 0 differences (1 parser bug found and fixed: `[^]--]`) | `tests/rust_oracle.rs` |
-| Predictions vs the real `regex` crate (full match and search) | 300,000 patterns × up to 16 haystacks, 0 disagreements | `tests/rust_oracle.rs` |
-| Derivative vs Thompson engine, Hopcroft vs Brzozowski | 1,000,000 random terms with ∩ and ¬, identical minimal DFAs; 0 of 5,000 sampled hit a budget | `tests/double_construction.rs`, `tests/coverage_stats.rs` |
-| Witness valid, shortest (brute force ≤ 6), identical across engines | 200,000 random pairs | `tests/equiv_props.rs` |
-| Algebraic laws proven (`r\|r=r`, `(r*)*=r*`, `r(s\|t)=rs\|rt`, `¬¬r=r`, `r∩¬r=∅`, De Morgan …) | 1,000 random instances each | `tests/laws.rs`, `tests/equiv_props.rs` |
-| Parser fuzzing (libFuzzer) | 599,467 runs / 10 min, no crashes or hangs | `fuzz/` |
+| Accepts exactly what each real engine accepts | 100,000 random patterns per engine (Python, JS with 10 flag sets, Go, Java), 0 disagreements, plus ~70–120 hand-probed edge cases each | `tests/{python,js,go,java}_oracle.rs` |
+| Predictions vs the real engines, full match and search, look-around included | 100,000 patterns × up to 16 haystacks per engine, 0 disagreements | same files, `tests/rust_oracle.rs` |
+| Rust parser vs `regex-syntax` | 1,000,000 random patterns, 0 disagreements | `tests/rust_differential.rs` |
+| Look-behind engine vs direct semantics | 100,000 random terms | `tests/lookbehind_engine.rs` |
+| Derivative vs Thompson, Hopcroft vs Brzozowski | 1,000,000 random terms, identical minimal DFAs | `tests/double_construction.rs` |
+| Witness valid, shortest (brute force ≤ 6), identical across engines | 100,000 random pairs | `tests/equiv_props.rs` |
+| Bugs the oracles caught (all fixed, kept as regressions) | 2 in the Rust parser (plus 1 slow path), 2 in the Python parser, 5 in the oracle runners, 4 in JS/Go/Java parsing and lowering | test files, [docs/findings.md](docs/findings.md) |
+| Engine behaviour found | V8 `u`-mode search tries positions inside surrogate pairs (modelled) | [docs/findings.md](docs/findings.md) |
 
-Reproduce: `cargo test --workspace` (default case counts), or set `PROPTEST_CASES` for long runs.
+Reproduce: `cargo test --workspace`; set `PROPTEST_CASES` for long runs, `REFRACT_ORACLE=docker`
+to use the pinned engine images.
 
 ## Flavours
 
-| Flavour | Front-end | Oracle | Notes |
-|---|---|---|---|
-| Rust `regex` | ✅ | in-process | bootstrap flavour, fully regular |
-| JavaScript | P3 | Node (Docker) | v0.5 |
-| Python `re` | P3 | CPython (Docker) | v0.5 |
-| Go / RE2 | P3 | Go (Docker) | v0.5 |
-| Java | P3 | JDK (Docker) | v0.5 |
-| PCRE2, .NET, Ruby | after v0.5 | Docker | |
+| Flavour | Front-end | Oracle | Unicode | Notes |
+|---|---|---|---|---|
+| JavaScript | ✅ no flags (Annex B) + `u`, `i m s` | V8 14.6 (Node 26) | 17.0 | `v`, `y`, `\p` not analysed yet; without `u`: BMP haystacks |
+| Python `re` | ✅ | CPython 3.15.2 | 17.0.0 | `\N{..}` not analysed yet |
+| Go `regexp` | ✅ incl. `\p{..}` | Go 1.27.4 | 17.0.0 | |
+| Java | ✅ incl. look-behind windows | JDK 25.0.5.1 | JDK 25 | `\p`, `\X`, `(?U)`, `(?c)` not analysed yet |
+| Rust `regex` | ✅ | in-process | regex-syntax | bonus flavour |
+| PCRE2, .NET, Ruby | planned | | | |
 
 ## Layout
 
 ```
 crates/refract-core   parsers, IR, char-set algebra, derivative + Thompson engines,
                       minimisation, equivalence (library, no I/O, forbid(unsafe))
-crates/refract-cli    the `refract` binary and the in-process Rust oracle
+crates/refract-cli    the `refract` binary (parse, dfa, equiv, refract, flavors)
+crates/refract-oracle real-engine harness (JSON lines, native or pinned Docker)
+oracle/               one runner + Dockerfile per engine
+tools/                table generators that run inside each engine
 spec/                 IR, witness definition, per-flavour semantics (spec before code)
 docs/adr/             architecture decision records
 fuzz/                 cargo-fuzz targets (nightly)
