@@ -1,6 +1,7 @@
 //! `refract` — command-line interface to refract-core.
 //!
-//! Exit codes: 0 success, 1 pattern rejected, 2 usage or analysis error.
+//! Exit codes: 0 success / equivalent, 1 different or pattern rejected, 2 usage or analysis
+//! error, 3 a prediction was contradicted by the real engine (a Refract bug: please report).
 
 use anyhow::Result;
 use clap::{Parser, Subcommand};
@@ -8,6 +9,7 @@ use refract_core::{Engine, Flavor, Op};
 use std::process::ExitCode;
 
 mod commands;
+mod oracle;
 
 #[derive(Parser)]
 #[command(
@@ -15,7 +17,8 @@ mod commands;
     version,
     about = "Same pattern, different meaning: see exactly where.",
     long_about = "Refract parses regexes from several engines' flavours into one formal model, \
-                  and builds minimal automata for it."
+                  decides equivalence with automata, and reports the shortest string where two \
+                  patterns disagree, replayed on the real engine."
 )]
 struct Cli {
     #[command(subcommand)]
@@ -36,6 +39,30 @@ enum Command {
         #[arg(long)]
         json: bool,
         pattern: String,
+    },
+    /// Decide whether two patterns behave the same; print the shortest witness if not.
+    ///
+    /// Patterns are written FLAVOR:PATTERN (e.g. rust:a+). Without a known flavour prefix the
+    /// whole argument is the pattern, in the --flavor flavour.
+    Equiv {
+        #[arg(long)]
+        a: String,
+        #[arg(long)]
+        b: String,
+        /// Default flavour for arguments without a prefix.
+        #[arg(long, short = 'f', default_value = "rust")]
+        flavor: Flavor,
+        /// Operation the verdict is about: full (whole haystack) or search (match anywhere).
+        #[arg(long, default_value = "full")]
+        op: Op,
+        /// Automaton construction: deriv (default) or thompson (reference).
+        #[arg(long, default_value = "deriv")]
+        engine: Engine,
+        /// Raise the state budget.
+        #[arg(long)]
+        max_states: Option<usize>,
+        #[arg(long)]
+        json: bool,
     },
     /// Build the minimal DFA of a pattern.
     Dfa {
@@ -75,6 +102,22 @@ fn run(cli: Cli) -> Result<ExitCode> {
             json,
             pattern,
         } => commands::parse(flavor, &pattern, compact, json),
+        Command::Equiv {
+            a,
+            b,
+            flavor,
+            op,
+            engine,
+            max_states,
+            json,
+        } => commands::equiv(
+            &commands::split_flavor(&a, flavor),
+            &commands::split_flavor(&b, flavor),
+            op,
+            engine,
+            max_states,
+            json,
+        ),
         Command::Dfa {
             flavor,
             op,

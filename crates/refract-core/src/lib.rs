@@ -15,6 +15,7 @@ pub mod budget;
 pub mod charset;
 pub mod deriv;
 pub mod dfa;
+pub mod equiv;
 pub mod error;
 pub mod flavor;
 pub mod ir;
