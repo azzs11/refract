@@ -1,0 +1,331 @@
+{
+ "operation": "search",
+ "note": "Search (re.search, RegExp.test, Matcher.find), the operation most code uses.",
+ "patterns": [
+  {
+   "id": 1,
+   "kind": "textbook",
+   "pattern": "^(a+)+$"
+  },
+  {
+   "id": 2,
+   "kind": "textbook",
+   "pattern": "^(a|a)*$"
+  },
+  {
+   "id": 3,
+   "kind": "textbook",
+   "pattern": "^(a|aa)+$"
+  },
+  {
+   "id": 4,
+   "kind": "textbook",
+   "pattern": "^(a*)*$"
+  },
+  {
+   "id": 5,
+   "kind": "textbook",
+   "pattern": "(x+x+)+y"
+  },
+  {
+   "id": 6,
+   "kind": "textbook",
+   "pattern": "^(a+)*b"
+  },
+  {
+   "id": 7,
+   "kind": "textbook",
+   "pattern": "^(\\d+)*$"
+  },
+  {
+   "id": 8,
+   "kind": "textbook",
+   "pattern": "(\\d+)*x"
+  },
+  {
+   "id": 9,
+   "kind": "textbook",
+   "pattern": "^(a|a?)+$"
+  },
+  {
+   "id": 10,
+   "kind": "textbook",
+   "pattern": "^((a+)+)+$"
+  },
+  {
+   "id": 11,
+   "kind": "textbook",
+   "pattern": "^(a+)+?$"
+  },
+  {
+   "id": 12,
+   "kind": "textbook",
+   "pattern": "a*a*b"
+  },
+  {
+   "id": 13,
+   "kind": "textbook",
+   "pattern": "a*a*a*b"
+  },
+  {
+   "id": 14,
+   "kind": "textbook",
+   "pattern": "\\d+\\.\\d+"
+  },
+  {
+   "id": 15,
+   "kind": "textbook",
+   "pattern": "(.*a){12}"
+  },
+  {
+   "id": 16,
+   "kind": "textbook",
+   "pattern": "^(ab|a)*c$"
+  },
+  {
+   "id": 17,
+   "kind": "textbook",
+   "pattern": "^(a|b|ab)*c$"
+  },
+  {
+   "id": 18,
+   "kind": "textbook",
+   "pattern": "(a|ab)*c"
+  },
+  {
+   "id": 19,
+   "kind": "textbook",
+   "pattern": "^(?:a+)+b$"
+  },
+  {
+   "id": 20,
+   "kind": "textbook",
+   "pattern": "^(a+b?)+$"
+  },
+  {
+   "id": 21,
+   "kind": "real-world",
+   "pattern": "^(\\w+\\s?)+$"
+  },
+  {
+   "id": 22,
+   "kind": "real-world",
+   "pattern": "^([a-zA-Z0-9]+\\s?)*$"
+  },
+  {
+   "id": 23,
+   "kind": "real-world",
+   "pattern": "^(([a-z])+.)+[A-Z]([a-z])+$"
+  },
+  {
+   "id": 24,
+   "kind": "real-world",
+   "pattern": "\\s*#?\\s*$"
+  },
+  {
+   "id": 25,
+   "kind": "real-world",
+   "pattern": "^\\s*(\\w+\\s*)+$"
+  },
+  {
+   "id": 26,
+   "kind": "real-world",
+   "pattern": "^([\\w.-]+)+@\\w+\\.com$"
+  },
+  {
+   "id": 27,
+   "kind": "real-world",
+   "pattern": "^(.*?,){11}P"
+  },
+  {
+   "id": 28,
+   "kind": "real-world",
+   "pattern": "(\\w+\\d+)+C"
+  },
+  {
+   "id": 29,
+   "kind": "real-world",
+   "pattern": "^(\\s*,\\s*)*$"
+  },
+  {
+   "id": 30,
+   "kind": "real-world",
+   "pattern": "^\\s+|\\s+$"
+  },
+  {
+   "id": 31,
+   "kind": "real-world",
+   "pattern": "\\s+$"
+  },
+  {
+   "id": 32,
+   "kind": "real-world",
+   "pattern": "^(/[\\w-]+)+/?$"
+  },
+  {
+   "id": 33,
+   "kind": "real-world",
+   "pattern": "^([a-zA-Z0-9_.\\-])+@(([a-zA-Z0-9\\-])+\\.)+([a-zA-Z0-9]{2,4})+$"
+  },
+  {
+   "id": 34,
+   "kind": "real-world",
+   "pattern": "^(https?://)?([\\da-z.-]+)\\.([a-z.]{2,6})([/\\w .-]*)*/?$"
+  },
+  {
+   "id": 35,
+   "kind": "real-world",
+   "pattern": "^((?:\\d+)?\\.?\\d+) *(ms|s|m|h|d)?$"
+  },
+  {
+   "id": 36,
+   "kind": "real-world",
+   "pattern": "^\\s*(?:\\d+\\s*)+$"
+  },
+  {
+   "id": 37,
+   "kind": "real-world",
+   "pattern": "(\\r?\\n)+$"
+  },
+  {
+   "id": 38,
+   "kind": "real-world",
+   "pattern": "^(\\w|-)+(\\.(\\w|-)+)*$"
+  },
+  {
+   "id": 39,
+   "kind": "real-world",
+   "pattern": "^[\\s\\S]*?\\s*$"
+  },
+  {
+   "id": 40,
+   "kind": "real-world",
+   "pattern": "<!--[\\s\\S]*?-->\\s*$"
+  },
+  {
+   "id": 41,
+   "kind": "real-world",
+   "pattern": "^(\\d+\\.)*\\d+$"
+  },
+  {
+   "id": 42,
+   "kind": "real-world",
+   "pattern": "^(\\w+:?)+\\w+$"
+  },
+  {
+   "id": 43,
+   "kind": "real-world",
+   "pattern": "(=+)+$"
+  },
+  {
+   "id": 44,
+   "kind": "real-world",
+   "pattern": "^(\\s|#)*$"
+  },
+  {
+   "id": 45,
+   "kind": "real-world",
+   "pattern": "[a-z]+\\d+[a-z]+\\d+X"
+  },
+  {
+   "id": 46,
+   "kind": "everyday",
+   "pattern": "^[a-z0-9]+@[a-z0-9]+\\.com$"
+  },
+  {
+   "id": 47,
+   "kind": "everyday",
+   "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+  },
+  {
+   "id": 48,
+   "kind": "everyday",
+   "pattern": "^(\\d{1,3}\\.){3}\\d{1,3}$"
+  },
+  {
+   "id": 49,
+   "kind": "everyday",
+   "pattern": "^#?([a-f0-9]{6}|[a-f0-9]{3})$"
+  },
+  {
+   "id": 50,
+   "kind": "everyday",
+   "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+  },
+  {
+   "id": 51,
+   "kind": "everyday",
+   "pattern": "^[A-Z][a-z]*( [A-Z][a-z]*)*$"
+  },
+  {
+   "id": 52,
+   "kind": "everyday",
+   "pattern": "^\\w+$"
+  },
+  {
+   "id": 53,
+   "kind": "everyday",
+   "pattern": "^(ab)*$"
+  },
+  {
+   "id": 54,
+   "kind": "everyday",
+   "pattern": "\\\"[^\\\"]*\\\""
+  },
+  {
+   "id": 55,
+   "kind": "everyday",
+   "pattern": "^\\s*$"
+  },
+  {
+   "id": 56,
+   "kind": "everyday",
+   "pattern": "^\\+?\\d+$"
+  },
+  {
+   "id": 57,
+   "kind": "everyday",
+   "pattern": "^(?:\\d+,)*\\d+$"
+  },
+  {
+   "id": 58,
+   "kind": "everyday",
+   "pattern": "^([a-z]+-)*[a-z]+$"
+  },
+  {
+   "id": 59,
+   "kind": "everyday",
+   "pattern": "^/[a-z/]*$"
+  },
+  {
+   "id": 60,
+   "kind": "everyday",
+   "pattern": "^(a|b|c)+$"
+  },
+  {
+   "id": 61,
+   "kind": "everyday",
+   "pattern": "^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$"
+  },
+  {
+   "id": 62,
+   "kind": "everyday",
+   "pattern": "^(?:[01]\\d|2[0-3]):[0-5]\\d$"
+  },
+  {
+   "id": 63,
+   "kind": "everyday",
+   "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
+  },
+  {
+   "id": 64,
+   "kind": "everyday",
+   "pattern": "^-?\\d+(\\.\\d+)?$"
+  },
+  {
+   "id": 65,
+   "kind": "everyday",
+   "pattern": "^(?:\\w+\\.)*\\w+$"
+  }
+ ]
+}

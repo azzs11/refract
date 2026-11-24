@@ -1,0 +1,7 @@
+{
+  "name": "refract-bench-redos",
+  "private": true,
+  "type": "module",
+  "description": "Baseline tools for the ReDoS benchmark (pinned).",
+  "dependencies": { "recheck": "4.5.0" }
+}

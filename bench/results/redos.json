@@ -1,0 +1,4286 @@
+{
+ "meta": {
+  "operation": "search",
+  "patterns": 65,
+  "timeout_s": 2.0,
+  "engines": {
+   "python": "python 3.15.2",
+   "js": "node 14.6.202.34-node.40",
+   "java": "java 25.0.5.1"
+  },
+  "tools": {
+   "recheck": "4.5.0 (npm)",
+   "regexploit": "1.0.0 (PyPI, Python 3.12)"
+  },
+  "refract": "refract 0.1.0",
+  "seconds": 701
+ },
+ "score": {
+  "refract/python": {
+   "tp": 40,
+   "fp": 0,
+   "fn": 1,
+   "tn": 24,
+   "unknown": 0,
+   "precision": 1.0,
+   "recall": 0.975609756097561
+  },
+  "refract/js": {
+   "tp": 40,
+   "fp": 0,
+   "fn": 1,
+   "tn": 24,
+   "unknown": 0,
+   "precision": 1.0,
+   "recall": 0.975609756097561
+  },
+  "refract/java": {
+   "tp": 32,
+   "fp": 0,
+   "fn": 1,
+   "tn": 32,
+   "unknown": 0,
+   "precision": 1.0,
+   "recall": 0.9696969696969697
+  },
+  "recheck/python": {
+   "tp": 41,
+   "fp": 0,
+   "fn": 0,
+   "tn": 24,
+   "unknown": 0,
+   "precision": 1.0,
+   "recall": 1.0
+  },
+  "recheck/js": {
+   "tp": 41,
+   "fp": 0,
+   "fn": 0,
+   "tn": 24,
+   "unknown": 0,
+   "precision": 1.0,
+   "recall": 1.0
+  },
+  "recheck/java": {
+   "tp": 33,
+   "fp": 8,
+   "fn": 0,
+   "tn": 24,
+   "unknown": 0,
+   "precision": 0.8048780487804879,
+   "recall": 1.0
+  },
+  "regexploit/python": {
+   "tp": 20,
+   "fp": 0,
+   "fn": 21,
+   "tn": 24,
+   "unknown": 0,
+   "precision": 1.0,
+   "recall": 0.4878048780487805
+  },
+  "regexploit/js": {
+   "tp": 20,
+   "fp": 0,
+   "fn": 21,
+   "tn": 24,
+   "unknown": 0,
+   "precision": 1.0,
+   "recall": 0.4878048780487805
+  },
+  "regexploit/java": {
+   "tp": 20,
+   "fp": 0,
+   "fn": 13,
+   "tn": 32,
+   "unknown": 0,
+   "precision": 1.0,
+   "recall": 0.6060606060606061
+  }
+ },
+ "rows": [
+  {
+   "id": 1,
+   "kind": "textbook",
+   "pattern": "^(a+)+$",
+   "refract": {
+    "python": {
+     "predicted": "exponential",
+     "measured": "exponential x3.92/pump",
+     "status": "confirmed",
+     "engine": "python 3.15.2"
+    },
+    "js": {
+     "predicted": "exponential",
+     "measured": "exponential x4.08/pump",
+     "status": "confirmed",
+     "engine": "node 14.6.202.34-node.40"
+    },
+    "java": {
+     "predicted": "polynomial O(n^2)",
+     "measured": "polynomial ~n^1.9",
+     "status": "confirmed",
+     "engine": "java 25.0.5.1"
+    }
+   },
+   "recheck": {
+    "status": "vulnerable",
+    "complexity": {
+     "type": "exponential",
+     "degree": null
+    },
+    "checker": "automaton",
+    "attack": {
+     "prefix": "",
+     "leads": [
+      "a"
+     ],
+     "pumps": [
+      "a"
+     ],
+     "suffix": "\u0000"
+    }
+   },
+   "regexploit": {
+    "vulnerable": true,
+    "starriness": 11,
+    "attack": {
+     "prefix": "",
+     "pumps": [
+      "a"
+     ],
+     "suffix": "0"
+    }
+   },
+   "attacks_measured": {
+    "python": {
+     "refract": true,
+     "recheck": true,
+     "regexploit": true
+    },
+    "js": {
+     "refract": true,
+     "recheck": true,
+     "regexploit": true
+    },
+    "java": {
+     "refract": true,
+     "recheck": true,
+     "regexploit": true
+    }
+   },
+   "truth": {
+    "python": true,
+    "js": true,
+    "java": true
+   }
+  },
+  {
+   "id": 2,
+   "kind": "textbook",
+   "pattern": "^(a|a)*$",
+   "refract": {
+    "python": {
+     "predicted": "exponential",
+     "measured": "exponential x3.98/pump",
+     "status": "confirmed",
+     "engine": "python 3.15.2"
+    },
+    "js": {
+     "predicted": "exponential",
+     "measured": "exponential x3.81/pump",
+     "status": "confirmed",
+     "engine": "node 14.6.202.34-node.40"
+    },
+    "java": {
+     "predicted": "linear",
+     "measured": "linear",
+     "status": "confirmed",
+     "engine": "java 25.0.5.1"
+    }
+   },
+   "recheck": {
+    "status": "vulnerable",
+    "complexity": {
+     "type": "exponential",
+     "degree": null
+    },
+    "checker": "automaton",
+    "attack": {
+     "prefix": "",
+     "leads": [
+      ""
+     ],
+     "pumps": [
+      "a"
+     ],
+     "suffix": "\u0000"
+    }
+   },
+   "regexploit": {
+    "vulnerable": false
+   },
+   "attacks_measured": {
+    "python": {
+     "refract": true,
+     "recheck": true
+    },
+    "js": {
+     "refract": true,
+     "recheck": true
+    },
+    "java": {
+     "refract": false,
+     "recheck": false
+    }
+   },
+   "truth": {
+    "python": true,
+    "js": true,
+    "java": false
+   }
+  },
+  {
+   "id": 3,
+   "kind": "textbook",
+   "pattern": "^(a|aa)+$",
+   "refract": {
+    "python": {
+     "predicted": "exponential",
+     "measured": "exponential x3.91/pump",
+     "status": "confirmed",
+     "engine": "python 3.15.2"
+    },
+    "js": {
+     "predicted": "exponential",
+     "measured": "exponential x4.23/pump",
+     "status": "confirmed",
+     "engine": "node 14.6.202.34-node.40"
+    },
+    "java": {
+     "predicted": "linear",
+     "measured": "linear",
+     "status": "confirmed",
+     "engine": "java 25.0.5.1"
+    }
+   },
+   "recheck": {
+    "status": "vulnerable",
+    "complexity": {
+     "type": "exponential",
+     "degree": null
+    },
+    "checker": "automaton",
+    "attack": {
+     "prefix": "",
+     "leads": [
+      "a"
+     ],
+     "pumps": [
+      "aaaa"
+     ],
+     "suffix": "\u0000"
+    }
+   },
+   "regexploit": {
+    "vulnerable": false
+   },
+   "attacks_measured": {
+    "python": {
+     "refract": true,
+     "recheck": false
+    },
+    "js": {
+     "refract": true,
+     "recheck": true
+    },
+    "java": {
+     "refract": false,
+     "recheck": false
+    }
+   },
+   "truth": {
+    "python": true,
+    "js": true,
+    "java": false
+   }
+  },
+  {
+   "id": 4,
+   "kind": "textbook",
+   "pattern": "^(a*)*$",
+   "refract": {
+    "python": {
+     "predicted": "exponential",
+     "measured": "exponential x1.95/pump",
+     "status": "confirmed",
+     "engine": "python 3.15.2"
+    },
+    "js": {
+     "predicted": "exponential",
+     "measured": "exponential x2.01/pump",
+     "status": "confirmed",
+     "engine": "node 14.6.202.34-node.40"
+    },
+    "java": {
+     "predicted": "polynomial O(n^2)",
+     "measured": "polynomial ~n^1.9",
+     "status": "confirmed",
+     "engine": "java 25.0.5.1"
+    }
+   },
+   "recheck": {
+    "status": "vulnerable",
+    "complexity": {
+     "type": "exponential",
+     "degree": null
+    },
+    "checker": "automaton",
+    "attack": {
+     "prefix": "",
+     "leads": [
+      "a"
+     ],
+     "pumps": [
+      "a"
+     ],
+     "suffix": "\u0000"
+    }
+   },
+   "regexploit": {
+    "vulnerable": true,
+    "starriness": 11,
+    "attack": {
+     "prefix": "",
+     "pumps": [
+      "a"
+     ],
+     "suffix": "0"
+    }
+   },
+   "attacks_measured": {
+    "python": {
+     "refract": true,
+     "recheck": true,
+     "regexploit": true
+    },
+    "js": {
+     "refract": true,
+     "recheck": true,
+     "regexploit": true
+    },
+    "java": {
+     "refract": true,
+     "recheck": true,
+     "regexploit": true
+    }
+   },
+   "truth": {
+    "python": true,
+    "js": true,
+    "java": true
+   }
+  },
+  {
+   "id": 5,
+   "kind": "textbook",
+   "pattern": "(x+x+)+y",
+   "refract": {
+    "python": {
+     "predicted": "exponential",
+     "measured": "exponential x5.68/pump",
+     "status": "confirmed",
+     "engine": "python 3.15.2"
+    },
+    "js": {
+     "predicted": "exponential",
+     "measured": "exponential x7.99/pump",
+     "status": "confirmed",
+     "engine": "node 14.6.202.34-node.40"
+    },
+    "java": {
+     "predicted": "polynomial O(n^3)",
+     "measured": "polynomial ~n^2.5",
+     "status": "confirmed",
+     "engine": "java 25.0.5.1"
+    }
+   },
+   "recheck": {
+    "status": "vulnerable",
+    "complexity": {
+     "type": "exponential",
+     "degree": null
+    },
+    "checker": "automaton",
+    "attack": {
+     "prefix": "",
+     "leads": [
+      "x"
+     ],
+     "pumps": [
+      "xx"
+     ],
+     "suffix": ""
+    }
+   },
+   "regexploit": {
+    "vulnerable": true,
+    "starriness": 21,
+    "attack": {
+     "prefix": "",
+     "pumps": [
+      "x"
+     ],
+     "suffix": ""
+    }
+   },
+   "attacks_measured": {
+    "python": {
+     "refract": true,
+     "recheck": true,
+     "regexploit": true
+    },
+    "js": {
+     "refract": true,
+     "recheck": true,
+     "regexploit": true
+    },
+    "java": {
+     "refract": true,
+     "recheck": true,
+     "regexploit": true
+    }
+   },
+   "truth": {
+    "python": true,
+    "js": true,
+    "java": true
+   }
+  },
+  {
+   "id": 6,
+   "kind": "textbook",
+   "pattern": "^(a+)*b",
+   "refract": {
+    "python": {
+     "predicted": "exponential",
+     "measured": "exponential x3.70/pump",
+     "status": "confirmed",
+     "engine": "python 3.15.2"
+    },
+    "js": {
+     "predicted": "exponential",
+     "measured": "exponential x3.94/pump",
+     "status": "confirmed",
+     "engine": "node 14.6.202.34-node.40"
+    },
+    "java": {
+     "predicted": "polynomial O(n^2)",
+     "measured": "polynomial ~n^1.8",
+     "status": "confirmed",
+     "engine": "java 25.0.5.1"
+    }
+   },
+   "recheck": {
+    "status": "vulnerable",
+    "complexity": {
+     "type": "exponential",
+     "degree": null
+    },
+    "checker": "automaton",
+    "attack": {
+     "prefix": "",
+     "leads": [
+      "a"
+     ],
+     "pumps": [
+      "a"
+     ],
+     "suffix": ""
+    }
+   },
+   "regexploit": {
+    "vulnerable": true,
+    "starriness": 11,
+    "attack": {
+     "prefix": "",
+     "pumps": [
+      "a"
+     ],
+     "suffix": ""
+    }
+   },
+   "attacks_measured": {
+    "python": {
+     "refract": true,
+     "recheck": true,
+     "regexploit": true
+    },
+    "js": {
+     "refract": true,
+     "recheck": true,
+     "regexploit": true
+    },
+    "java": {
+     "refract": true,
+     "recheck": true,
+     "regexploit": true
+    }
+   },
+   "truth": {
+    "python": true,
+    "js": true,
+    "java": true
+   }
+  },
+  {
+   "id": 7,
+   "kind": "textbook",
+   "pattern": "^(\\d+)*$",
+   "refract": {
+    "python": {
+     "predicted": "exponential",
+     "measured": "exponential x3.94/pump",
+     "status": "confirmed",
+     "engine": "python 3.15.2"
+    },
+    "js": {
+     "predicted": "exponential",
+     "measured": "exponential x4.01/pump",
+     "status": "confirmed",
+     "engine": "node 14.6.202.34-node.40"
+    },
+    "java": {
+     "predicted": "polynomial O(n^2)",
+     "measured": "polynomial ~n^1.9",
+     "status": "confirmed",
+     "engine": "java 25.0.5.1"
+    }
+   },
+   "recheck": {
+    "status": "vulnerable",
+    "complexity": {
+     "type": "exponential",
+     "degree": null
+    },
+    "checker": "automaton",
+    "attack": {
+     "prefix": "",
+     "leads": [
+      "0"
+     ],
+     "pumps": [
+      "0"
+     ],
+     "suffix": "\u0000"
+    }
+   },
+   "regexploit": {
+    "vulnerable": true,
+    "starriness": 11,
+    "attack": {
+     "prefix": "",
+     "pumps": [
+      "0"
+     ],
+     "suffix": "a"
+    }
+   },
+   "attacks_measured": {
+    "python": {
+     "refract": true,
+     "recheck": true,
+     "regexploit": true
+    },
+    "js": {
+     "refract": true,
+     "recheck": true,
+     "regexploit": true
+    },
+    "java": {
+     "refract": true,
+     "recheck": true,
+     "regexploit": true
+    }
+   },
+   "truth": {
+    "python": true,
+    "js": true,
+    "java": true
+   }
+  },
+  {
+   "id": 8,
+   "kind": "textbook",
+   "pattern": "(\\d+)*x",
+   "refract": {
+    "python": {
+     "predicted": "exponential",
+     "measured": "exponential x3.96/pump",
+     "status": "confirmed",
+     "engine": "python 3.15.2"
+    },
+    "js": {
+     "predicted": "exponential",
+     "measured": "exponential x3.73/pump",
+     "status": "confirmed",
+     "engine": "node 14.6.202.34-node.40"
+    },
+    "java": {
+     "predicted": "polynomial O(n^2)",
+     "measured": "polynomial ~n^1.9",
+     "status": "confirmed",
+     "engine": "java 25.0.5.1"
+    }
+   },
+   "recheck": {
+    "status": "vulnerable",
+    "complexity": {
+     "type": "exponential",
+     "degree": null
+    },
+    "checker": "automaton",
+    "attack": {
+     "prefix": "",
+     "leads": [
+      "0"
+     ],
+     "pumps": [
+      "0"
+     ],
+     "suffix": "\u0000x"
+    }
+   },
+   "regexploit": {
+    "vulnerable": true,
+    "starriness": 11,
+    "attack": {
+     "prefix": "",
+     "pumps": [
+      "0"
+     ],
+     "suffix": ""
+    }
+   },
+   "attacks_measured": {
+    "python": {
+     "refract": true,
+     "recheck": true,
+     "regexploit": true
+    },
+    "js": {
+     "refract": true,
+     "recheck": true,
+     "regexploit": true
+    },
+    "java": {
+     "refract": true,
+     "recheck": true,
+     "regexploit": true
+    }
+   },
+   "truth": {
+    "python": true,
+    "js": true,
+    "java": true
+   }
+  },
+  {
+   "id": 9,
+   "kind": "textbook",
+   "pattern": "^(a|a?)+$",
+   "refract": {
+    "python": {
+     "predicted": "exponential",
+     "measured": "exponential x3.94/pump",
+     "status": "confirmed",
+     "engine": "python 3.15.2"
+    },
+    "js": {
+     "predicted": "exponential",
+     "measured": "exponential x3.84/pump",
+     "status": "confirmed",
+     "engine": "node 14.6.202.34-node.40"
+    },
+    "java": {
+     "predicted": "linear",
+     "measured": "linear",
+     "status": "confirmed",
+     "engine": "java 25.0.5.1"
+    }
+   },
+   "recheck": {
+    "status": "vulnerable",
+    "complexity": {
+     "type": "exponential",
+     "degree": null
+    },
+    "checker": "automaton",
+    "attack": {
+     "prefix": "",
+     "leads": [
+      "a"
+     ],
+     "pumps": [
+      "a"
+     ],
+     "suffix": "\u0000"
+    }
+   },
+   "regexploit": {
+    "vulnerable": false
+   },
+   "attacks_measured": {
+    "python": {
+     "refract": true,
+     "recheck": true
+    },
+    "js": {
+     "refract": true,
+     "recheck": true
+    },
+    "java": {
+     "refract": false,
+     "recheck": false
+    }
+   },
+   "truth": {
+    "python": true,
+    "js": true,
+    "java": false
+   }
+  },
+  {
+   "id": 10,
+   "kind": "textbook",
+   "pattern": "^((a+)+)+$",
+   "refract": {
+    "python": {
+     "predicted": "exponential",
+     "measured": "exponential x6.12/pump",
+     "status": "confirmed",
+     "engine": "python 3.15.2"
+    },
+    "js": {
+     "predicted": "exponential",
+     "measured": "exponential x8.94/pump",
+     "status": "confirmed",
+     "engine": "node 14.6.202.34-node.40"
+    },
+    "java": {
+     "predicted": "exponential",
+     "measured": "exponential x3.20/pump",
+     "status": "confirmed",
+     "engine": "java 25.0.5.1"
+    }
+   },
+   "recheck": {
+    "status": "vulnerable",
+    "complexity": {
+     "type": "exponential",
+     "degree": null
+    },
+    "checker": "automaton",
+    "attack": {
+     "prefix": "",
+     "leads": [
+      "a"
+     ],
+     "pumps": [
+      "a"
+     ],
+     "suffix": "\u0000"
+    }
+   },
+   "regexploit": {
+    "vulnerable": true,
+    "starriness": 111,
+    "attack": {
+     "prefix": "",
+     "pumps": [
+      "a"
+     ],
+     "suffix": "0"
+    }
+   },
+   "attacks_measured": {
+    "python": {
+     "refract": true,
+     "recheck": true,
+     "regexploit": true
+    },
+    "js": {
+     "refract": true,
+     "recheck": true,
+     "regexploit": true
+    },
+    "java": {
+     "refract": true,
+     "recheck": true,
+     "regexploit": true
+    }
+   },
+   "truth": {
+    "python": true,
+    "js": true,
+    "java": true
+   }
+  },
+  {
+   "id": 11,
+   "kind": "textbook",
+   "pattern": "^(a+)+?$",
+   "refract": {
+    "python": {
+     "predicted": "exponential",
+     "measured": "exponential x3.91/pump",
+     "status": "confirmed",
+     "engine": "python 3.15.2"
+    },
+    "js": {
+     "predicted": "exponential",
+     "measured": "exponential x3.65/pump",
+     "status": "confirmed",
+     "engine": "node 14.6.202.34-node.40"
+    },
+    "java": {
+     "predicted": "exponential",
+     "measured": "exponential x3.47/pump",
+     "status": "confirmed",
+     "engine": "java 25.0.5.1"
+    }
+   },
+   "recheck": {
+    "status": "vulnerable",
+    "complexity": {
+     "type": "exponential",
+     "degree": null
+    },
+    "checker": "automaton",
+    "attack": {
+     "prefix": "",
+     "leads": [
+      "a"
+     ],
+     "pumps": [
+      "a"
+     ],
+     "suffix": "\u0000"
+    }
+   },
+   "regexploit": {
+    "vulnerable": true,
+    "starriness": 11,
+    "attack": {
+     "prefix": "",
+     "pumps": [
+      "a"
+     ],
+     "suffix": "0"
+    }
+   },
+   "attacks_measured": {
+    "python": {
+     "refract": true,
+     "recheck": true,
+     "regexploit": true
+    },
+    "js": {
+     "refract": true,
+     "recheck": true,
+     "regexploit": true
+    },
+    "java": {
+     "refract": true,
+     "recheck": true,
+     "regexploit": true
+    }
+   },
+   "truth": {
+    "python": true,
+    "js": true,
+    "java": true
+   }
+  },
+  {
+   "id": 12,
+   "kind": "textbook",
+   "pattern": "a*a*b",
+   "refract": {
+    "python": {
+     "predicted": "polynomial O(n^3)",
+     "measured": "polynomial ~n^2.9",
+     "status": "confirmed",
+     "engine": "python 3.15.2"
+    },
+    "js": {
+     "predicted": "polynomial O(n^3)",
+     "measured": "polynomial ~n^2.8",
+     "status": "confirmed",
+     "engine": "node 14.6.202.34-node.40"
+    },
+    "java": {
+     "predicted": "polynomial O(n^3)",
+     "measured": "polynomial ~n^2.6",
+     "status": "confirmed",
+     "engine": "java 25.0.5.1"
+    }
+   },
+   "recheck": {
+    "status": "vulnerable",
+    "complexity": {
+     "type": "polynomial",
+     "degree": 3
+    },
+    "checker": "automaton",
+    "attack": {
+     "prefix": "",
+     "leads": [
+      "",
+      ""
+     ],
+     "pumps": [
+      "a",
+      "a"
+     ],
+     "suffix": "\u0000b"
+    }
+   },
+   "regexploit": {
+    "vulnerable": false
+   },
+   "attacks_measured": {
+    "python": {
+     "refract": true,
+     "recheck": true
+    },
+    "js": {
+     "refract": true,
+     "recheck": true
+    },
+    "java": {
+     "refract": true,
+     "recheck": true
+    }
+   },
+   "truth": {
+    "python": true,
+    "js": true,
+    "java": true
+   }
+  },
+  {
+   "id": 13,
+   "kind": "textbook",
+   "pattern": "a*a*a*b",
+   "refract": {
+    "python": {
+     "predicted": "polynomial O(n^4)",
+     "measured": "polynomial ~n^3.7",
+     "status": "confirmed",
+     "engine": "python 3.15.2"
+    },
+    "js": {
+     "predicted": "polynomial O(n^4)",
+     "measured": "polynomial ~n^3.9",
+     "status": "confirmed",
+     "engine": "node 14.6.202.34-node.40"
+    },
+    "java": {
+     "predicted": "polynomial O(n^4)",
+     "measured": "polynomial ~n^3.4",
+     "status": "confirmed",
+     "engine": "java 25.0.5.1"
+    }
+   },
+   "recheck": {
+    "status": "vulnerable",
+    "complexity": {
+     "type": "polynomial",
+     "degree": 4
+    },
+    "checker": "automaton",
+    "attack": {
+     "prefix": "",
+     "leads": [
+      "",
+      "",
+      ""
+     ],
+     "pumps": [
+      "a",
+      "a",
+      "a"
+     ],
+     "suffix": "\u0000b"
+    }
+   },
+   "regexploit": {
+    "vulnerable": true,
+    "starriness": 3,
+    "attack": {
+     "prefix": "",
+     "pumps": [
+      "a"
+     ],
+     "suffix": ""
+    }
+   },
+   "attacks_measured": {
+    "python": {
+     "refract": true,
+     "recheck": true,
+     "regexploit": true
+    },
+    "js": {
+     "refract": true,
+     "recheck": true,
+     "regexploit": true
+    },
+    "java": {
+     "refract": true,
+     "recheck": true,
+     "regexploit": true
+    }
+   },
+   "truth": {
+    "python": true,
+    "js": true,
+    "java": true
+   }
+  },
+  {
+   "id": 14,
+   "kind": "textbook",
+   "pattern": "\\d+\\.\\d+",
+   "refract": {
+    "python": {
+     "predicted": "polynomial O(n^2)",
+     "measured": "polynomial ~n^2.0",
+     "status": "confirmed",
+     "engine": "python 3.15.2"
+    },
+    "js": {
+     "predicted": "polynomial O(n^2)",
+     "measured": "polynomial ~n^2.0",
+     "status": "confirmed",
+     "engine": "node 14.6.202.34-node.40"
+    },
+    "java": {
+     "predicted": "polynomial O(n^2)",
+     "measured": "polynomial ~n^1.9",
+     "status": "confirmed",
+     "engine": "java 25.0.5.1"
+    }
+   },
+   "recheck": {
+    "status": "vulnerable",
+    "complexity": {
+     "type": "polynomial",
+     "degree": 2
+    },
+    "checker": "automaton",
+    "attack": {
+     "prefix": "",
+     "leads": [
+      ""
+     ],
+     "pumps": [
+      "0"
+     ],
+     "suffix": "0\u00000.0"
+    }
+   },
+   "regexploit": {
+    "vulnerable": false
+   },
+   "attacks_measured": {
+    "python": {
+     "refract": true,
+     "recheck": true
+    },
+    "js": {
+     "refract": true,
+     "recheck": true
+    },
+    "java": {
+     "refract": true,
+     "recheck": true
+    }
+   },
+   "truth": {
+    "python": true,
+    "js": true,
+    "java": true
+   }
+  },
+  {
+   "id": 15,
+   "kind": "textbook",
+   "pattern": "(.*a){12}",
+   "refract": {
+    "python": {
+     "predicted": "polynomial O(n^2)",
+     "measured": "polynomial ~n^2.0",
+     "status": "confirmed",
+     "engine": "python 3.15.2"
+    },
+    "js": {
+     "predicted": "polynomial O(n^2)",
+     "measured": "polynomial ~n^2.0",
+     "status": "confirmed",
+     "engine": "node 14.6.202.34-node.40"
+    },
+    "java": {
+     "predicted": "polynomial O(n^2)",
+     "measured": "polynomial ~n^1.9",
+     "status": "confirmed",
+     "engine": "java 25.0.5.1"
+    }
+   },
+   "recheck": {
+    "status": "vulnerable",
+    "complexity": {
+     "type": "polynomial",
+     "degree": 2
+    },
+    "checker": "automaton",
+    "attack": {
+     "prefix": "",
+     "leads": [
+      ""
+     ],
+     "pumps": [
+      "\u0000"
+     ],
+     "suffix": ""
+    }
+   },
+   "regexploit": {
+    "vulnerable": false
+   },
+   "attacks_measured": {
+    "python": {
+     "refract": true,
+     "recheck": true
+    },
+    "js": {
+     "refract": true,
+     "recheck": true
+    },
+    "java": {
+     "refract": true,
+     "recheck": true
+    }
+   },
+   "truth": {
+    "python": true,
+    "js": true,
+    "java": true
+   }
+  },
+  {
+   "id": 16,
+   "kind": "textbook",
+   "pattern": "^(ab|a)*c$",
+   "refract": {
+    "python": {
+     "predicted": "linear",
+     "measured": null,
+     "status": "predicted (no attack string makes it backtrack)",
+     "engine": "python 3.15.2"
+    },
+    "js": {
+     "predicted": "linear",
+     "measured": null,
+     "status": "predicted (no attack string makes it backtrack)",
+     "engine": "node 14.6.202.34-node.40"
+    },
+    "java": {
+     "predicted": "linear",
+     "measured": null,
+     "status": "predicted (no attack string makes it backtrack)",
+     "engine": "java 25.0.5.1"
+    }
+   },
+   "recheck": {
+    "status": "safe",
+    "complexity": {
+     "type": "linear",
+     "degree": null
+    },
+    "checker": "automaton",
+    "attack": null
+   },
+   "regexploit": {
+    "vulnerable": false
+   },
+   "attacks_measured": {
+    "python": {
+     "refract": null
+    },
+    "js": {
+     "refract": null
+    },
+    "java": {
+     "refract": null
+    }
+   },
+   "truth": {
+    "python": false,
+    "js": false,
+    "java": false
+   }
+  },
+  {
+   "id": 17,
+   "kind": "textbook",
+   "pattern": "^(a|b|ab)*c$",
+   "refract": {
+    "python": {
+     "predicted": "exponential",
+     "measured": "exponential x1.97/pump",
+     "status": "confirmed",
+     "engine": "python 3.15.2"
+    },
+    "js": {
+     "predicted": "exponential",
+     "measured": "exponential x1.98/pump",
+     "status": "confirmed",
+     "engine": "node 14.6.202.34-node.40"
+    },
+    "java": {
+     "predicted": "linear",
+     "measured": "linear",
+     "status": "confirmed",
+     "engine": "java 25.0.5.1"
+    }
+   },
+   "recheck": {
+    "status": "vulnerable",
+    "complexity": {
+     "type": "exponential",
+     "degree": null
+    },
+    "checker": "automaton",
+    "attack": {
+     "prefix": "",
+     "leads": [
+      "a"
+     ],
+     "pumps": [
+      "baba"
+     ],
+     "suffix": "\u0000"
+    }
+   },
+   "regexploit": {
+    "vulnerable": false
+   },
+   "attacks_measured": {
+    "python": {
+     "refract": true,
+     "recheck": true
+    },
+    "js": {
+     "refract": true,
+     "recheck": true
+    },
+    "java": {
+     "refract": false,
+     "recheck": false
+    }
+   },
+   "truth": {
+    "python": true,
+    "js": true,
+    "java": false
+   }
+  },
+  {
+   "id": 18,
+   "kind": "textbook",
+   "pattern": "(a|ab)*c",
+   "refract": {
+    "python": {
+     "predicted": "polynomial O(n^2)",
+     "measured": "polynomial ~n^1.9",
+     "status": "confirmed",
+     "engine": "python 3.15.2"
+    },
+    "js": {
+     "predicted": "polynomial O(n^2)",
+     "measured": "polynomial ~n^2.0",
+     "status": "confirmed",
+     "engine": "node 14.6.202.34-node.40"
+    },
+    "java": {
+     "predicted": "linear",
+     "measured": "linear",
+     "status": "confirmed",
+     "engine": "java 25.0.5.1"
+    }
+   },
+   "recheck": {
+    "status": "vulnerable",
+    "complexity": {
+     "type": "polynomial",
+     "degree": 2
+    },
+    "checker": "automaton",
+    "attack": {
+     "prefix": "",
+     "leads": [
+      ""
+     ],
+     "pumps": [
+      "ba"
+     ],
+     "suffix": "\u0000c"
+    }
+   },
+   "regexploit": {
+    "vulnerable": false
+   },
+   "attacks_measured": {
+    "python": {
+     "refract": true,
+     "recheck": true
+    },
+    "js": {
+     "refract": true,
+     "recheck": true
+    },
+    "java": {
+     "refract": false,
+     "recheck": false
+    }
+   },
+   "truth": {
+    "python": true,
+    "js": true,
+    "java": false
+   }
+  },
+  {
+   "id": 19,
+   "kind": "textbook",
+   "pattern": "^(?:a+)+b$",
+   "refract": {
+    "python": {
+     "predicted": "exponential",
+     "measured": "exponential x4.00/pump",
+     "status": "confirmed",
+     "engine": "python 3.15.2"
+    },
+    "js": {
+     "predicted": "exponential",
+     "measured": "exponential x3.83/pump",
+     "status": "confirmed",
+     "engine": "node 14.6.202.34-node.40"
+    },
+    "java": {
+     "predicted": "polynomial O(n^2)",
+     "measured": "polynomial ~n^1.9",
+     "status": "confirmed",
+     "engine": "java 25.0.5.1"
+    }
+   },
+   "recheck": {
+    "status": "vulnerable",
+    "complexity": {
+     "type": "exponential",
+     "degree": null
+    },
+    "checker": "automaton",
+    "attack": {
+     "prefix": "",
+     "leads": [
+      "a"
+     ],
+     "pumps": [
+      "a"
+     ],
+     "suffix": "a"
+    }
+   },
+   "regexploit": {
+    "vulnerable": true,
+    "starriness": 11,
+    "attack": {
+     "prefix": "",
+     "pumps": [
+      "a"
+     ],
+     "suffix": ""
+    }
+   },
+   "attacks_measured": {
+    "python": {
+     "refract": true,
+     "recheck": true,
+     "regexploit": true
+    },
+    "js": {
+     "refract": true,
+     "recheck": true,
+     "regexploit": true
+    },
+    "java": {
+     "refract": true,
+     "recheck": true,
+     "regexploit": true
+    }
+   },
+   "truth": {
+    "python": true,
+    "js": true,
+    "java": true
+   }
+  },
+  {
+   "id": 20,
+   "kind": "textbook",
+   "pattern": "^(a+b?)+$",
+   "refract": {
+    "python": {
+     "predicted": "exponential",
+     "measured": "exponential x3.96/pump",
+     "status": "confirmed",
+     "engine": "python 3.15.2"
+    },
+    "js": {
+     "predicted": "exponential",
+     "measured": "exponential x4.03/pump",
+     "status": "confirmed",
+     "engine": "node 14.6.202.34-node.40"
+    },
+    "java": {
+     "predicted": "polynomial O(n^2)",
+     "measured": "polynomial ~n^1.8",
+     "status": "confirmed",
+     "engine": "java 25.0.5.1"
+    }
+   },
+   "recheck": {
+    "status": "vulnerable",
+    "complexity": {
+     "type": "exponential",
+     "degree": null
+    },
+    "checker": "automaton",
+    "attack": {
+     "prefix": "",
+     "leads": [
+      "a"
+     ],
+     "pumps": [
+      "a"
+     ],
+     "suffix": "\u0000"
+    }
+   },
+   "regexploit": {
+    "vulnerable": true,
+    "starriness": 11,
+    "attack": {
+     "prefix": "",
+     "pumps": [
+      "a"
+     ],
+     "suffix": "0"
+    }
+   },
+   "attacks_measured": {
+    "python": {
+     "refract": true,
+     "recheck": true,
+     "regexploit": true
+    },
+    "js": {
+     "refract": true,
+     "recheck": true,
+     "regexploit": true
+    },
+    "java": {
+     "refract": true,
+     "recheck": true,
+     "regexploit": true
+    }
+   },
+   "truth": {
+    "python": true,
+    "js": true,
+    "java": true
+   }
+  },
+  {
+   "id": 21,
+   "kind": "real-world",
+   "pattern": "^(\\w+\\s?)+$",
+   "refract": {
+    "python": {
+     "predicted": "exponential",
+     "measured": "exponential x3.81/pump",
+     "status": "confirmed",
+     "engine": "python 3.15.2"
+    },
+    "js": {
+     "predicted": "exponential",
+     "measured": "exponential x4.04/pump",
+     "status": "confirmed",
+     "engine": "node 14.6.202.34-node.40"
+    },
+    "java": {
+     "predicted": "polynomial O(n^2)",
+     "measured": "polynomial ~n^1.9",
+     "status": "confirmed",
+     "engine": "java 25.0.5.1"
+    }
+   },
+   "recheck": {
+    "status": "vulnerable",
+    "complexity": {
+     "type": "exponential",
+     "degree": null
+    },
+    "checker": "automaton",
+    "attack": {
+     "prefix": "",
+     "leads": [
+      "0"
+     ],
+     "pumps": [
+      "0"
+     ],
+     "suffix": "\u0000"
+    }
+   },
+   "regexploit": {
+    "vulnerable": true,
+    "starriness": 11,
+    "attack": {
+     "prefix": "",
+     "pumps": [
+      "0"
+     ],
+     "suffix": "!"
+    }
+   },
+   "attacks_measured": {
+    "python": {
+     "refract": true,
+     "recheck": true,
+     "regexploit": true
+    },
+    "js": {
+     "refract": true,
+     "recheck": true,
+     "regexploit": true
+    },
+    "java": {
+     "refract": true,
+     "recheck": true,
+     "regexploit": true
+    }
+   },
+   "truth": {
+    "python": true,
+    "js": true,
+    "java": true
+   }
+  },
+  {
+   "id": 22,
+   "kind": "real-world",
+   "pattern": "^([a-zA-Z0-9]+\\s?)*$",
+   "refract": {
+    "python": {
+     "predicted": "exponential",
+     "measured": "exponential x3.95/pump",
+     "status": "confirmed",
+     "engine": "python 3.15.2"
+    },
+    "js": {
+     "predicted": "exponential",
+     "measured": "exponential x4.06/pump",
+     "status": "confirmed",
+     "engine": "node 14.6.202.34-node.40"
+    },
+    "java": {
+     "predicted": "polynomial O(n^2)",
+     "measured": "polynomial ~n^1.9",
+     "status": "confirmed",
+     "engine": "java 25.0.5.1"
+    }
+   },
+   "recheck": {
+    "status": "vulnerable",
+    "complexity": {
+     "type": "exponential",
+     "degree": null
+    },
+    "checker": "automaton",
+    "attack": {
+     "prefix": "",
+     "leads": [
+      "0"
+     ],
+     "pumps": [
+      "0"
+     ],
+     "suffix": "\u0000"
+    }
+   },
+   "regexploit": {
+    "vulnerable": true,
+    "starriness": 11,
+    "attack": {
+     "prefix": "",
+     "pumps": [
+      "0"
+     ],
+     "suffix": "!"
+    }
+   },
+   "attacks_measured": {
+    "python": {
+     "refract": true,
+     "recheck": true,
+     "regexploit": true
+    },
+    "js": {
+     "refract": true,
+     "recheck": true,
+     "regexploit": true
+    },
+    "java": {
+     "refract": true,
+     "recheck": true,
+     "regexploit": true
+    }
+   },
+   "truth": {
+    "python": true,
+    "js": true,
+    "java": true
+   }
+  },
+  {
+   "id": 23,
+   "kind": "real-world",
+   "pattern": "^(([a-z])+.)+[A-Z]([a-z])+$",
+   "refract": {
+    "python": {
+     "predicted": "exponential",
+     "measured": "exponential x4.16/pump",
+     "status": "confirmed",
+     "engine": "python 3.15.2"
+    },
+    "js": {
+     "predicted": "exponential",
+     "measured": "exponential x4.24/pump",
+     "status": "confirmed",
+     "engine": "node 14.6.202.34-node.40"
+    },
+    "java": {
+     "predicted": "polynomial O(n^2)",
+     "measured": "polynomial ~n^1.9",
+     "status": "confirmed",
+     "engine": "java 25.0.5.1"
+    }
+   },
+   "recheck": {
+    "status": "vulnerable",
+    "complexity": {
+     "type": "exponential",
+     "degree": null
+    },
+    "checker": "automaton",
+    "attack": {
+     "prefix": "",
+     "leads": [
+      "aa"
+     ],
+     "pumps": [
+      "aaaa"
+     ],
+     "suffix": "a"
+    }
+   },
+   "regexploit": {
+    "vulnerable": true,
+    "starriness": 11,
+    "attack": {
+     "prefix": "",
+     "pumps": [
+      "a"
+     ],
+     "suffix": ""
+    }
+   },
+   "attacks_measured": {
+    "python": {
+     "refract": true,
+     "recheck": true,
+     "regexploit": true
+    },
+    "js": {
+     "refract": true,
+     "recheck": true,
+     "regexploit": true
+    },
+    "java": {
+     "refract": true,
+     "recheck": true,
+     "regexploit": true
+    }
+   },
+   "truth": {
+    "python": true,
+    "js": true,
+    "java": true
+   }
+  },
+  {
+   "id": 24,
+   "kind": "real-world",
+   "pattern": "\\s*#?\\s*$",
+   "refract": {
+    "python": {
+     "predicted": "polynomial O(n^3)",
+     "measured": "polynomial ~n^2.9",
+     "status": "confirmed",
+     "engine": "python 3.15.2"
+    },
+    "js": {
+     "predicted": "polynomial O(n^3)",
+     "measured": "polynomial ~n^2.8",
+     "status": "confirmed",
+     "engine": "node 14.6.202.34-node.40"
+    },
+    "java": {
+     "predicted": "polynomial O(n^3)",
+     "measured": "polynomial ~n^2.6",
+     "status": "confirmed",
+     "engine": "java 25.0.5.1"
+    }
+   },
+   "recheck": {
+    "status": "vulnerable",
+    "complexity": {
+     "type": "polynomial",
+     "degree": 3
+    },
+    "checker": "automaton",
+    "attack": {
+     "prefix": "",
+     "leads": [
+      "",
+      ""
+     ],
+     "pumps": [
+      "\t",
+      "\t"
+     ],
+     "suffix": "\u0000"
+    }
+   },
+   "regexploit": {
+    "vulnerable": false
+   },
+   "attacks_measured": {
+    "python": {
+     "refract": true,
+     "recheck": true
+    },
+    "js": {
+     "refract": true,
+     "recheck": true
+    },
+    "java": {
+     "refract": true,
+     "recheck": true
+    }
+   },
+   "truth": {
+    "python": true,
+    "js": true,
+    "java": true
+   }
+  },
+  {
+   "id": 25,
+   "kind": "real-world",
+   "pattern": "^\\s*(\\w+\\s*)+$",
+   "refract": {
+    "python": {
+     "predicted": "exponential",
+     "measured": "exponential x3.80/pump",
+     "status": "confirmed",
+     "engine": "python 3.15.2"
+    },
+    "js": {
+     "predicted": "exponential",
+     "measured": "exponential x4.01/pump",
+     "status": "confirmed",
+     "engine": "node 14.6.202.34-node.40"
+    },
+    "java": {
+     "predicted": "polynomial O(n^2)",
+     "measured": "polynomial ~n^1.8",
+     "status": "confirmed",
+     "engine": "java 25.0.5.1"
+    }
+   },
+   "recheck": {
+    "status": "vulnerable",
+    "complexity": {
+     "type": "exponential",
+     "degree": null
+    },
+    "checker": "automaton",
+    "attack": {
+     "prefix": "",
+     "leads": [
+      "0"
+     ],
+     "pumps": [
+      "0"
+     ],
+     "suffix": "\u0000"
+    }
+   },
+   "regexploit": {
+    "vulnerable": true,
+    "starriness": 11,
+    "attack": {
+     "prefix": "",
+     "pumps": [
+      "0"
+     ],
+     "suffix": "!"
+    }
+   },
+   "attacks_measured": {
+    "python": {
+     "refract": true,
+     "recheck": true,
+     "regexploit": true
+    },
+    "js": {
+     "refract": true,
+     "recheck": true,
+     "regexploit": true
+    },
+    "java": {
+     "refract": true,
+     "recheck": true,
+     "regexploit": true
+    }
+   },
+   "truth": {
+    "python": true,
+    "js": true,
+    "java": true
+   }
+  },
+  {
+   "id": 26,
+   "kind": "real-world",
+   "pattern": "^([\\w.-]+)+@\\w+\\.com$",
+   "refract": {
+    "python": {
+     "predicted": "exponential",
+     "measured": "exponential x3.98/pump",
+     "status": "confirmed",
+     "engine": "python 3.15.2"
+    },
+    "js": {
+     "predicted": "exponential",
+     "measured": "exponential x3.60/pump",
+     "status": "confirmed",
+     "engine": "node 14.6.202.34-node.40"
+    },
+    "java": {
+     "predicted": "polynomial O(n^2)",
+     "measured": "polynomial ~n^1.9",
+     "status": "confirmed",
+     "engine": "java 25.0.5.1"
+    }
+   },
+   "recheck": {
+    "status": "vulnerable",
+    "complexity": {
+     "type": "exponential",
+     "degree": null
+    },
+    "checker": "automaton",
+    "attack": {
+     "prefix": "",
+     "leads": [
+      "m"
+     ],
+     "pumps": [
+      "o"
+     ],
+     "suffix": "0.com"
+    }
+   },
+   "regexploit": {
+    "vulnerable": true,
+    "starriness": 11,
+    "attack": {
+     "prefix": "",
+     "pumps": [
+      "0"
+     ],
+     "suffix": ""
+    }
+   },
+   "attacks_measured": {
+    "python": {
+     "refract": true,
+     "recheck": true,
+     "regexploit": true
+    },
+    "js": {
+     "refract": true,
+     "recheck": true,
+     "regexploit": true
+    },
+    "java": {
+     "refract": true,
+     "recheck": true,
+     "regexploit": true
+    }
+   },
+   "truth": {
+    "python": true,
+    "js": true,
+    "java": true
+   }
+  },
+  {
+   "id": 27,
+   "kind": "real-world",
+   "pattern": "^(.*?,){11}P",
+   "refract": {
+    "python": {
+     "predicted": "polynomial O(n^11)",
+     "measured": "exponential (timed out)",
+     "status": "confirmed",
+     "engine": "python 3.15.2"
+    },
+    "js": {
+     "predicted": "polynomial O(n^11)",
+     "measured": "linear",
+     "status": "not confirmed: the engine stays linear (it optimises this case)",
+     "engine": "node 14.6.202.34-node.40"
+    },
+    "java": {
+     "predicted": "polynomial O(n^11)",
+     "measured": "exponential (timed out)",
+     "status": "confirmed",
+     "engine": "java 25.0.5.1"
+    }
+   },
+   "recheck": {
+    "status": "vulnerable",
+    "complexity": {
+     "type": "polynomial",
+     "degree": 11
+    },
+    "checker": "automaton",
+    "attack": {
+     "prefix": "",
+     "leads": [
+      "",
+      "\u0000",
+      "",
+      "",
+      "P",
+      "",
+      "\u0000",
+      "P",
+      "\u0000",
+      ""
+     ],
+     "pumps": [
+      ",",
+      "P,\u0000",
+      "P,\u0000",
+      "P,\u0000",
+      ",",
+      ",",
+      "P,\u0000",
+      ",",
+      "P,\u0000",
+      "P,\u0000"
+     ],
+     "suffix": "P"
+    }
+   },
+   "regexploit": {
+    "vulnerable": false
+   },
+   "attacks_measured": {
+    "python": {
+     "refract": true,
+     "recheck": true
+    },
+    "js": {
+     "refract": false,
+     "recheck": true
+    },
+    "java": {
+     "refract": true,
+     "recheck": true
+    }
+   },
+   "truth": {
+    "python": true,
+    "js": true,
+    "java": true
+   }
+  },
+  {
+   "id": 28,
+   "kind": "real-world",
+   "pattern": "(\\w+\\d+)+C",
+   "refract": {
+    "python": {
+     "predicted": "exponential",
+     "measured": "exponential x1.94/pump",
+     "status": "confirmed",
+     "engine": "python 3.15.2"
+    },
+    "js": {
+     "predicted": "exponential",
+     "measured": "exponential x2.00/pump",
+     "status": "confirmed",
+     "engine": "node 14.6.202.34-node.40"
+    },
+    "java": {
+     "predicted": "polynomial O(n^3)",
+     "measured": "polynomial ~n^2.6",
+     "status": "confirmed",
+     "engine": "java 25.0.5.1"
+    }
+   },
+   "recheck": {
+    "status": "vulnerable",
+    "complexity": {
+     "type": "exponential",
+     "degree": null
+    },
+    "checker": "automaton",
+    "attack": {
+     "prefix": "",
+     "leads": [
+      "0"
+     ],
+     "pumps": [
+      "C0A"
+     ],
+     "suffix": "C"
+    }
+   },
+   "regexploit": {
+    "vulnerable": false
+   },
+   "attacks_measured": {
+    "python": {
+     "refract": true,
+     "recheck": true
+    },
+    "js": {
+     "refract": true,
+     "recheck": true
+    },
+    "java": {
+     "refract": true,
+     "recheck": true
+    }
+   },
+   "truth": {
+    "python": true,
+    "js": true,
+    "java": true
+   }
+  },
+  {
+   "id": 29,
+   "kind": "real-world",
+   "pattern": "^(\\s*,\\s*)*$",
+   "refract": {
+    "python": {
+     "predicted": "exponential",
+     "measured": "exponential x1.97/pump",
+     "status": "confirmed",
+     "engine": "python 3.15.2"
+    },
+    "js": {
+     "predicted": "exponential",
+     "measured": "exponential x2.01/pump",
+     "status": "confirmed",
+     "engine": "node 14.6.202.34-node.40"
+    },
+    "java": {
+     "predicted": "linear",
+     "measured": "linear",
+     "status": "confirmed",
+     "engine": "java 25.0.5.1"
+    }
+   },
+   "recheck": {
+    "status": "vulnerable",
+    "complexity": {
+     "type": "exponential",
+     "degree": null
+    },
+    "checker": "automaton",
+    "attack": {
+     "prefix": "",
+     "leads": [
+      ","
+     ],
+     "pumps": [
+      "\t,"
+     ],
+     "suffix": "\u0000"
+    }
+   },
+   "regexploit": {
+    "vulnerable": false
+   },
+   "attacks_measured": {
+    "python": {
+     "refract": true,
+     "recheck": true
+    },
+    "js": {
+     "refract": true,
+     "recheck": true
+    },
+    "java": {
+     "refract": false,
+     "recheck": false
+    }
+   },
+   "truth": {
+    "python": true,
+    "js": true,
+    "java": false
+   }
+  },
+  {
+   "id": 30,
+   "kind": "real-world",
+   "pattern": "^\\s+|\\s+$",
+   "refract": {
+    "python": {
+     "predicted": "polynomial O(n^2)",
+     "measured": "polynomial ~n^2.0",
+     "status": "confirmed",
+     "engine": "python 3.15.2"
+    },
+    "js": {
+     "predicted": "polynomial O(n^2)",
+     "measured": "polynomial ~n^1.7",
+     "status": "confirmed",
+     "engine": "node 14.6.202.34-node.40"
+    },
+    "java": {
+     "predicted": "polynomial O(n^2)",
+     "measured": "polynomial ~n^1.8",
+     "status": "confirmed",
+     "engine": "java 25.0.5.1"
+    }
+   },
+   "recheck": {
+    "status": "vulnerable",
+    "complexity": {
+     "type": "polynomial",
+     "degree": 2
+    },
+    "checker": "automaton",
+    "attack": {
+     "prefix": "",
+     "leads": [
+      "\u0000"
+     ],
+     "pumps": [
+      "\t"
+     ],
+     "suffix": "\t\u0000"
+    }
+   },
+   "regexploit": {
+    "vulnerable": false
+   },
+   "attacks_measured": {
+    "python": {
+     "refract": true,
+     "recheck": true
+    },
+    "js": {
+     "refract": true,
+     "recheck": true
+    },
+    "java": {
+     "refract": true,
+     "recheck": true
+    }
+   },
+   "truth": {
+    "python": true,
+    "js": true,
+    "java": true
+   }
+  },
+  {
+   "id": 31,
+   "kind": "real-world",
+   "pattern": "\\s+$",
+   "refract": {
+    "python": {
+     "predicted": "polynomial O(n^2)",
+     "measured": "polynomial ~n^2.0",
+     "status": "confirmed",
+     "engine": "python 3.15.2"
+    },
+    "js": {
+     "predicted": "polynomial O(n^2)",
+     "measured": "polynomial ~n^1.9",
+     "status": "confirmed",
+     "engine": "node 14.6.202.34-node.40"
+    },
+    "java": {
+     "predicted": "polynomial O(n^2)",
+     "measured": "polynomial ~n^1.9",
+     "status": "confirmed",
+     "engine": "java 25.0.5.1"
+    }
+   },
+   "recheck": {
+    "status": "vulnerable",
+    "complexity": {
+     "type": "polynomial",
+     "degree": 2
+    },
+    "checker": "automaton",
+    "attack": {
+     "prefix": "",
+     "leads": [
+      ""
+     ],
+     "pumps": [
+      "\t"
+     ],
+     "suffix": "\u0000\t"
+    }
+   },
+   "regexploit": {
+    "vulnerable": false
+   },
+   "attacks_measured": {
+    "python": {
+     "refract": true,
+     "recheck": true
+    },
+    "js": {
+     "refract": true,
+     "recheck": true
+    },
+    "java": {
+     "refract": true,
+     "recheck": true
+    }
+   },
+   "truth": {
+    "python": true,
+    "js": true,
+    "java": true
+   }
+  },
+  {
+   "id": 32,
+   "kind": "real-world",
+   "pattern": "^(/[\\w-]+)+/?$",
+   "refract": {
+    "python": {
+     "predicted": "linear",
+     "measured": null,
+     "status": "predicted (no attack string makes it backtrack)",
+     "engine": "python 3.15.2"
+    },
+    "js": {
+     "predicted": "linear",
+     "measured": null,
+     "status": "predicted (no attack string makes it backtrack)",
+     "engine": "node 14.6.202.34-node.40"
+    },
+    "java": {
+     "predicted": "linear",
+     "measured": null,
+     "status": "predicted (no attack string makes it backtrack)",
+     "engine": "java 25.0.5.1"
+    }
+   },
+   "recheck": {
+    "status": "safe",
+    "complexity": {
+     "type": "linear",
+     "degree": null
+    },
+    "checker": "automaton",
+    "attack": null
+   },
+   "regexploit": {
+    "vulnerable": false
+   },
+   "attacks_measured": {
+    "python": {
+     "refract": null
+    },
+    "js": {
+     "refract": null
+    },
+    "java": {
+     "refract": null
+    }
+   },
+   "truth": {
+    "python": false,
+    "js": false,
+    "java": false
+   }
+  },
+  {
+   "id": 33,
+   "kind": "real-world",
+   "pattern": "^([a-zA-Z0-9_.\\-])+@(([a-zA-Z0-9\\-])+\\.)+([a-zA-Z0-9]{2,4})+$",
+   "refract": {
+    "python": {
+     "predicted": "exponential",
+     "measured": "linear",
+     "status": "not confirmed: the engine stays linear (it optimises this case)",
+     "engine": "python 3.15.2"
+    },
+    "js": {
+     "predicted": "exponential",
+     "measured": "exponential x6.53/pump",
+     "status": "confirmed",
+     "engine": "node 14.6.202.34-node.40"
+    },
+    "java": {
+     "predicted": "linear",
+     "measured": "linear",
+     "status": "confirmed",
+     "engine": "java 25.0.5.1"
+    }
+   },
+   "recheck": {
+    "status": "vulnerable",
+    "complexity": {
+     "type": "exponential",
+     "degree": null
+    },
+    "checker": "automaton",
+    "attack": {
+     "prefix": "",
+     "leads": [
+      ".@0.0000"
+     ],
+     "pumps": [
+      "0000000000"
+     ],
+     "suffix": "\u0000"
+    }
+   },
+   "regexploit": {
+    "vulnerable": false
+   },
+   "attacks_measured": {
+    "python": {
+     "refract": false,
+     "recheck": true
+    },
+    "js": {
+     "refract": true,
+     "recheck": true
+    },
+    "java": {
+     "refract": false,
+     "recheck": false
+    }
+   },
+   "truth": {
+    "python": true,
+    "js": true,
+    "java": false
+   }
+  },
+  {
+   "id": 34,
+   "kind": "real-world",
+   "pattern": "^(https?://)?([\\da-z.-]+)\\.([a-z.]{2,6})([/\\w .-]*)*/?$",
+   "refract": {
+    "python": {
+     "predicted": "exponential",
+     "measured": "exponential x1.98/pump",
+     "status": "confirmed",
+     "engine": "python 3.15.2"
+    },
+    "js": {
+     "predicted": "exponential",
+     "measured": "exponential x2.00/pump",
+     "status": "confirmed",
+     "engine": "node 14.6.202.34-node.40"
+    },
+    "java": {
+     "predicted": "polynomial O(n^2)",
+     "measured": "polynomial ~n^1.9",
+     "status": "confirmed",
+     "engine": "java 25.0.5.1"
+    }
+   },
+   "recheck": {
+    "status": "vulnerable",
+    "complexity": {
+     "type": "exponential",
+     "degree": null
+    },
+    "checker": "automaton",
+    "attack": {
+     "prefix": "",
+     "leads": [
+      "s.aap"
+     ],
+     "pumps": [
+      "h"
+     ],
+     "suffix": "\u0000"
+    }
+   },
+   "regexploit": {
+    "vulnerable": true,
+    "starriness": 12,
+    "attack": {
+     "prefix": "",
+     "pumps": [
+      "."
+     ],
+     "suffix": "!"
+    }
+   },
+   "attacks_measured": {
+    "python": {
+     "refract": true,
+     "recheck": true,
+     "regexploit": true
+    },
+    "js": {
+     "refract": true,
+     "recheck": true,
+     "regexploit": true
+    },
+    "java": {
+     "refract": true,
+     "recheck": true,
+     "regexploit": true
+    }
+   },
+   "truth": {
+    "python": true,
+    "js": true,
+    "java": true
+   }
+  },
+  {
+   "id": 35,
+   "kind": "real-world",
+   "pattern": "^((?:\\d+)?\\.?\\d+) *(ms|s|m|h|d)?$",
+   "refract": {
+    "python": {
+     "predicted": "polynomial O(n^2)",
+     "measured": "polynomial ~n^1.9",
+     "status": "confirmed",
+     "engine": "python 3.15.2"
+    },
+    "js": {
+     "predicted": "polynomial O(n^2)",
+     "measured": "polynomial ~n^2.0",
+     "status": "confirmed",
+     "engine": "node 14.6.202.34-node.40"
+    },
+    "java": {
+     "predicted": "polynomial O(n^2)",
+     "measured": "polynomial ~n^1.8",
+     "status": "confirmed",
+     "engine": "java 25.0.5.1"
+    }
+   },
+   "recheck": {
+    "status": "vulnerable",
+    "complexity": {
+     "type": "polynomial",
+     "degree": 2
+    },
+    "checker": "automaton",
+    "attack": {
+     "prefix": "",
+     "leads": [
+      ""
+     ],
+     "pumps": [
+      "0"
+     ],
+     "suffix": "\u0000"
+    }
+   },
+   "regexploit": {
+    "vulnerable": false
+   },
+   "attacks_measured": {
+    "python": {
+     "refract": true,
+     "recheck": true
+    },
+    "js": {
+     "refract": true,
+     "recheck": true
+    },
+    "java": {
+     "refract": true,
+     "recheck": true
+    }
+   },
+   "truth": {
+    "python": true,
+    "js": true,
+    "java": true
+   }
+  },
+  {
+   "id": 36,
+   "kind": "real-world",
+   "pattern": "^\\s*(?:\\d+\\s*)+$",
+   "refract": {
+    "python": {
+     "predicted": "exponential",
+     "measured": "exponential x3.94/pump",
+     "status": "confirmed",
+     "engine": "python 3.15.2"
+    },
+    "js": {
+     "predicted": "exponential",
+     "measured": "exponential x4.05/pump",
+     "status": "confirmed",
+     "engine": "node 14.6.202.34-node.40"
+    },
+    "java": {
+     "predicted": "polynomial O(n^2)",
+     "measured": "polynomial ~n^1.8",
+     "status": "confirmed",
+     "engine": "java 25.0.5.1"
+    }
+   },
+   "recheck": {
+    "status": "vulnerable",
+    "complexity": {
+     "type": "exponential",
+     "degree": null
+    },
+    "checker": "automaton",
+    "attack": {
+     "prefix": "",
+     "leads": [
+      "0"
+     ],
+     "pumps": [
+      "0"
+     ],
+     "suffix": "\u0000"
+    }
+   },
+   "regexploit": {
+    "vulnerable": true,
+    "starriness": 11,
+    "attack": {
+     "prefix": "",
+     "pumps": [
+      "0"
+     ],
+     "suffix": "a"
+    }
+   },
+   "attacks_measured": {
+    "python": {
+     "refract": true,
+     "recheck": true,
+     "regexploit": true
+    },
+    "js": {
+     "refract": true,
+     "recheck": true,
+     "regexploit": true
+    },
+    "java": {
+     "refract": true,
+     "recheck": true,
+     "regexploit": true
+    }
+   },
+   "truth": {
+    "python": true,
+    "js": true,
+    "java": true
+   }
+  },
+  {
+   "id": 37,
+   "kind": "real-world",
+   "pattern": "(\\r?\\n)+$",
+   "refract": {
+    "python": {
+     "predicted": "polynomial O(n^2)",
+     "measured": "polynomial ~n^1.9",
+     "status": "confirmed",
+     "engine": "python 3.15.2"
+    },
+    "js": {
+     "predicted": "polynomial O(n^2)",
+     "measured": "polynomial ~n^2.0",
+     "status": "confirmed",
+     "engine": "node 14.6.202.34-node.40"
+    },
+    "java": {
+     "predicted": "linear",
+     "measured": "linear",
+     "status": "confirmed",
+     "engine": "java 25.0.5.1"
+    }
+   },
+   "recheck": {
+    "status": "vulnerable",
+    "complexity": {
+     "type": "polynomial",
+     "degree": 2
+    },
+    "checker": "automaton",
+    "attack": {
+     "prefix": "",
+     "leads": [
+      ""
+     ],
+     "pumps": [
+      "\n"
+     ],
+     "suffix": "\r"
+    }
+   },
+   "regexploit": {
+    "vulnerable": false
+   },
+   "attacks_measured": {
+    "python": {
+     "refract": true,
+     "recheck": true
+    },
+    "js": {
+     "refract": true,
+     "recheck": true
+    },
+    "java": {
+     "refract": false,
+     "recheck": false
+    }
+   },
+   "truth": {
+    "python": true,
+    "js": true,
+    "java": false
+   }
+  },
+  {
+   "id": 38,
+   "kind": "real-world",
+   "pattern": "^(\\w|-)+(\\.(\\w|-)+)*$",
+   "refract": {
+    "python": {
+     "predicted": "linear",
+     "measured": null,
+     "status": "predicted (no attack string makes it backtrack)",
+     "engine": "python 3.15.2"
+    },
+    "js": {
+     "predicted": "linear",
+     "measured": null,
+     "status": "predicted (no attack string makes it backtrack)",
+     "engine": "node 14.6.202.34-node.40"
+    },
+    "java": {
+     "predicted": "linear",
+     "measured": null,
+     "status": "predicted (no attack string makes it backtrack)",
+     "engine": "java 25.0.5.1"
+    }
+   },
+   "recheck": {
+    "status": "safe",
+    "complexity": {
+     "type": "linear",
+     "degree": null
+    },
+    "checker": "automaton",
+    "attack": null
+   },
+   "regexploit": {
+    "vulnerable": false
+   },
+   "attacks_measured": {
+    "python": {
+     "refract": null
+    },
+    "js": {
+     "refract": null
+    },
+    "java": {
+     "refract": null
+    }
+   },
+   "truth": {
+    "python": false,
+    "js": false,
+    "java": false
+   }
+  },
+  {
+   "id": 39,
+   "kind": "real-world",
+   "pattern": "^[\\s\\S]*?\\s*$",
+   "refract": {
+    "python": {
+     "predicted": "linear",
+     "measured": null,
+     "status": "predicted (no attack string makes it backtrack)",
+     "engine": "python 3.15.2"
+    },
+    "js": {
+     "predicted": "linear",
+     "measured": null,
+     "status": "predicted (no attack string makes it backtrack)",
+     "engine": "node 14.6.202.34-node.40"
+    },
+    "java": {
+     "predicted": "linear",
+     "measured": null,
+     "status": "predicted (no attack string makes it backtrack)",
+     "engine": "java 25.0.5.1"
+    }
+   },
+   "recheck": {
+    "status": "vulnerable",
+    "complexity": {
+     "type": "polynomial",
+     "degree": 2
+    },
+    "checker": "automaton",
+    "attack": {
+     "prefix": "",
+     "leads": [
+      ""
+     ],
+     "pumps": [
+      "\t"
+     ],
+     "suffix": "\u0000"
+    }
+   },
+   "regexploit": {
+    "vulnerable": false
+   },
+   "attacks_measured": {
+    "python": {
+     "refract": null,
+     "recheck": true
+    },
+    "js": {
+     "refract": null,
+     "recheck": true
+    },
+    "java": {
+     "refract": null,
+     "recheck": true
+    }
+   },
+   "truth": {
+    "python": true,
+    "js": true,
+    "java": true
+   }
+  },
+  {
+   "id": 40,
+   "kind": "real-world",
+   "pattern": "<!--[\\s\\S]*?-->\\s*$",
+   "refract": {
+    "python": {
+     "predicted": "polynomial O(n^2)",
+     "measured": "polynomial ~n^1.9",
+     "status": "confirmed",
+     "engine": "python 3.15.2"
+    },
+    "js": {
+     "predicted": "polynomial O(n^2)",
+     "measured": "polynomial ~n^2.0",
+     "status": "confirmed",
+     "engine": "node 14.6.202.34-node.40"
+    },
+    "java": {
+     "predicted": "polynomial O(n^2)",
+     "measured": "polynomial ~n^1.8",
+     "status": "confirmed",
+     "engine": "java 25.0.5.1"
+    }
+   },
+   "recheck": {
+    "status": "vulnerable",
+    "complexity": {
+     "type": "polynomial",
+     "degree": 2
+    },
+    "checker": "automaton",
+    "attack": {
+     "prefix": "",
+     "leads": [
+      ""
+     ],
+     "pumps": [
+      "<!--"
+     ],
+     "suffix": "\u0000"
+    }
+   },
+   "regexploit": {
+    "vulnerable": false
+   },
+   "attacks_measured": {
+    "python": {
+     "refract": true,
+     "recheck": true
+    },
+    "js": {
+     "refract": true,
+     "recheck": true
+    },
+    "java": {
+     "refract": true,
+     "recheck": true
+    }
+   },
+   "truth": {
+    "python": true,
+    "js": true,
+    "java": true
+   }
+  },
+  {
+   "id": 41,
+   "kind": "real-world",
+   "pattern": "^(\\d+\\.)*\\d+$",
+   "refract": {
+    "python": {
+     "predicted": "linear",
+     "measured": null,
+     "status": "predicted (no attack string makes it backtrack)",
+     "engine": "python 3.15.2"
+    },
+    "js": {
+     "predicted": "linear",
+     "measured": null,
+     "status": "predicted (no attack string makes it backtrack)",
+     "engine": "node 14.6.202.34-node.40"
+    },
+    "java": {
+     "predicted": "linear",
+     "measured": null,
+     "status": "predicted (no attack string makes it backtrack)",
+     "engine": "java 25.0.5.1"
+    }
+   },
+   "recheck": {
+    "status": "safe",
+    "complexity": {
+     "type": "linear",
+     "degree": null
+    },
+    "checker": "automaton",
+    "attack": null
+   },
+   "regexploit": {
+    "vulnerable": false
+   },
+   "attacks_measured": {
+    "python": {
+     "refract": null
+    },
+    "js": {
+     "refract": null
+    },
+    "java": {
+     "refract": null
+    }
+   },
+   "truth": {
+    "python": false,
+    "js": false,
+    "java": false
+   }
+  },
+  {
+   "id": 42,
+   "kind": "real-world",
+   "pattern": "^(\\w+:?)+\\w+$",
+   "refract": {
+    "python": {
+     "predicted": "exponential",
+     "measured": "exponential x3.64/pump",
+     "status": "confirmed",
+     "engine": "python 3.15.2"
+    },
+    "js": {
+     "predicted": "exponential",
+     "measured": "exponential x4.04/pump",
+     "status": "confirmed",
+     "engine": "node 14.6.202.34-node.40"
+    },
+    "java": {
+     "predicted": "polynomial O(n^2)",
+     "measured": "polynomial ~n^2.5",
+     "status": "confirmed",
+     "engine": "java 25.0.5.1"
+    }
+   },
+   "recheck": {
+    "status": "vulnerable",
+    "complexity": {
+     "type": "exponential",
+     "degree": null
+    },
+    "checker": "automaton",
+    "attack": {
+     "prefix": "",
+     "leads": [
+      "0"
+     ],
+     "pumps": [
+      "0"
+     ],
+     "suffix": ":"
+    }
+   },
+   "regexploit": {
+    "vulnerable": true,
+    "starriness": 12,
+    "attack": {
+     "prefix": "",
+     "pumps": [
+      "0"
+     ],
+     "suffix": "!"
+    }
+   },
+   "attacks_measured": {
+    "python": {
+     "refract": true,
+     "recheck": true,
+     "regexploit": true
+    },
+    "js": {
+     "refract": true,
+     "recheck": true,
+     "regexploit": true
+    },
+    "java": {
+     "refract": true,
+     "recheck": true,
+     "regexploit": true
+    }
+   },
+   "truth": {
+    "python": true,
+    "js": true,
+    "java": true
+   }
+  },
+  {
+   "id": 43,
+   "kind": "real-world",
+   "pattern": "(=+)+$",
+   "refract": {
+    "python": {
+     "predicted": "exponential",
+     "measured": "exponential x3.79/pump",
+     "status": "confirmed",
+     "engine": "python 3.15.2"
+    },
+    "js": {
+     "predicted": "exponential",
+     "measured": "exponential x3.97/pump",
+     "status": "confirmed",
+     "engine": "node 14.6.202.34-node.40"
+    },
+    "java": {
+     "predicted": "polynomial O(n^2)",
+     "measured": "polynomial ~n^1.9",
+     "status": "confirmed",
+     "engine": "java 25.0.5.1"
+    }
+   },
+   "recheck": {
+    "status": "vulnerable",
+    "complexity": {
+     "type": "exponential",
+     "degree": null
+    },
+    "checker": "automaton",
+    "attack": {
+     "prefix": "",
+     "leads": [
+      "="
+     ],
+     "pumps": [
+      "="
+     ],
+     "suffix": "\u0000="
+    }
+   },
+   "regexploit": {
+    "vulnerable": true,
+    "starriness": 11,
+    "attack": {
+     "prefix": "",
+     "pumps": [
+      "="
+     ],
+     "suffix": "0"
+    }
+   },
+   "attacks_measured": {
+    "python": {
+     "refract": true,
+     "recheck": true,
+     "regexploit": true
+    },
+    "js": {
+     "refract": true,
+     "recheck": true,
+     "regexploit": true
+    },
+    "java": {
+     "refract": true,
+     "recheck": true,
+     "regexploit": true
+    }
+   },
+   "truth": {
+    "python": true,
+    "js": true,
+    "java": true
+   }
+  },
+  {
+   "id": 44,
+   "kind": "real-world",
+   "pattern": "^(\\s|#)*$",
+   "refract": {
+    "python": {
+     "predicted": "linear",
+     "measured": null,
+     "status": "predicted (no attack string makes it backtrack)",
+     "engine": "python 3.15.2"
+    },
+    "js": {
+     "predicted": "linear",
+     "measured": null,
+     "status": "predicted (no attack string makes it backtrack)",
+     "engine": "node 14.6.202.34-node.40"
+    },
+    "java": {
+     "predicted": "linear",
+     "measured": null,
+     "status": "predicted (no attack string makes it backtrack)",
+     "engine": "java 25.0.5.1"
+    }
+   },
+   "recheck": {
+    "status": "safe",
+    "complexity": {
+     "type": "linear",
+     "degree": null
+    },
+    "checker": "automaton",
+    "attack": null
+   },
+   "regexploit": {
+    "vulnerable": false
+   },
+   "attacks_measured": {
+    "python": {
+     "refract": null
+    },
+    "js": {
+     "refract": null
+    },
+    "java": {
+     "refract": null
+    }
+   },
+   "truth": {
+    "python": false,
+    "js": false,
+    "java": false
+   }
+  },
+  {
+   "id": 45,
+   "kind": "real-world",
+   "pattern": "[a-z]+\\d+[a-z]+\\d+X",
+   "refract": {
+    "python": {
+     "predicted": "polynomial O(n^2)",
+     "measured": "polynomial ~n^1.9",
+     "status": "confirmed",
+     "engine": "python 3.15.2"
+    },
+    "js": {
+     "predicted": "polynomial O(n^2)",
+     "measured": "polynomial ~n^1.9",
+     "status": "confirmed",
+     "engine": "node 14.6.202.34-node.40"
+    },
+    "java": {
+     "predicted": "polynomial O(n^2)",
+     "measured": "polynomial ~n^1.9",
+     "status": "confirmed",
+     "engine": "java 25.0.5.1"
+    }
+   },
+   "recheck": {
+    "status": "vulnerable",
+    "complexity": {
+     "type": "polynomial",
+     "degree": 2
+    },
+    "checker": "automaton",
+    "attack": {
+     "prefix": "",
+     "leads": [
+      ""
+     ],
+     "pumps": [
+      "a"
+     ],
+     "suffix": "a0X"
+    }
+   },
+   "regexploit": {
+    "vulnerable": false
+   },
+   "attacks_measured": {
+    "python": {
+     "refract": true,
+     "recheck": true
+    },
+    "js": {
+     "refract": true,
+     "recheck": true
+    },
+    "java": {
+     "refract": true,
+     "recheck": true
+    }
+   },
+   "truth": {
+    "python": true,
+    "js": true,
+    "java": true
+   }
+  },
+  {
+   "id": 46,
+   "kind": "everyday",
+   "pattern": "^[a-z0-9]+@[a-z0-9]+\\.com$",
+   "refract": {
+    "python": {
+     "predicted": "linear",
+     "measured": null,
+     "status": "predicted (no attack string makes it backtrack)",
+     "engine": "python 3.15.2"
+    },
+    "js": {
+     "predicted": "linear",
+     "measured": null,
+     "status": "predicted (no attack string makes it backtrack)",
+     "engine": "node 14.6.202.34-node.40"
+    },
+    "java": {
+     "predicted": "linear",
+     "measured": null,
+     "status": "predicted (no attack string makes it backtrack)",
+     "engine": "java 25.0.5.1"
+    }
+   },
+   "recheck": {
+    "status": "safe",
+    "complexity": {
+     "type": "linear",
+     "degree": null
+    },
+    "checker": "automaton",
+    "attack": null
+   },
+   "regexploit": {
+    "vulnerable": false
+   },
+   "attacks_measured": {
+    "python": {
+     "refract": null
+    },
+    "js": {
+     "refract": null
+    },
+    "java": {
+     "refract": null
+    }
+   },
+   "truth": {
+    "python": false,
+    "js": false,
+    "java": false
+   }
+  },
+  {
+   "id": 47,
+   "kind": "everyday",
+   "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+   "refract": {
+    "python": {
+     "predicted": "linear",
+     "measured": null,
+     "status": "predicted (no attack string makes it backtrack)",
+     "engine": "python 3.15.2"
+    },
+    "js": {
+     "predicted": "linear",
+     "measured": null,
+     "status": "predicted (no attack string makes it backtrack)",
+     "engine": "node 14.6.202.34-node.40"
+    },
+    "java": {
+     "predicted": "linear",
+     "measured": null,
+     "status": "predicted (no attack string makes it backtrack)",
+     "engine": "java 25.0.5.1"
+    }
+   },
+   "recheck": {
+    "status": "safe",
+    "complexity": {
+     "type": "safe",
+     "degree": null
+    },
+    "checker": "automaton",
+    "attack": null
+   },
+   "regexploit": {
+    "vulnerable": false
+   },
+   "attacks_measured": {
+    "python": {
+     "refract": null
+    },
+    "js": {
+     "refract": null
+    },
+    "java": {
+     "refract": null
+    }
+   },
+   "truth": {
+    "python": false,
+    "js": false,
+    "java": false
+   }
+  },
+  {
+   "id": 48,
+   "kind": "everyday",
+   "pattern": "^(\\d{1,3}\\.){3}\\d{1,3}$",
+   "refract": {
+    "python": {
+     "predicted": "linear",
+     "measured": null,
+     "status": "predicted (no attack string makes it backtrack)",
+     "engine": "python 3.15.2"
+    },
+    "js": {
+     "predicted": "linear",
+     "measured": null,
+     "status": "predicted (no attack string makes it backtrack)",
+     "engine": "node 14.6.202.34-node.40"
+    },
+    "java": {
+     "predicted": "linear",
+     "measured": null,
+     "status": "predicted (no attack string makes it backtrack)",
+     "engine": "java 25.0.5.1"
+    }
+   },
+   "recheck": {
+    "status": "safe",
+    "complexity": {
+     "type": "safe",
+     "degree": null
+    },
+    "checker": "automaton",
+    "attack": null
+   },
+   "regexploit": {
+    "vulnerable": false
+   },
+   "attacks_measured": {
+    "python": {
+     "refract": null
+    },
+    "js": {
+     "refract": null
+    },
+    "java": {
+     "refract": null
+    }
+   },
+   "truth": {
+    "python": false,
+    "js": false,
+    "java": false
+   }
+  },
+  {
+   "id": 49,
+   "kind": "everyday",
+   "pattern": "^#?([a-f0-9]{6}|[a-f0-9]{3})$",
+   "refract": {
+    "python": {
+     "predicted": "linear",
+     "measured": null,
+     "status": "predicted (no attack string makes it backtrack)",
+     "engine": "python 3.15.2"
+    },
+    "js": {
+     "predicted": "linear",
+     "measured": null,
+     "status": "predicted (no attack string makes it backtrack)",
+     "engine": "node 14.6.202.34-node.40"
+    },
+    "java": {
+     "predicted": "linear",
+     "measured": null,
+     "status": "predicted (no attack string makes it backtrack)",
+     "engine": "java 25.0.5.1"
+    }
+   },
+   "recheck": {
+    "status": "safe",
+    "complexity": {
+     "type": "safe",
+     "degree": null
+    },
+    "checker": "automaton",
+    "attack": null
+   },
+   "regexploit": {
+    "vulnerable": false
+   },
+   "attacks_measured": {
+    "python": {
+     "refract": null
+    },
+    "js": {
+     "refract": null
+    },
+    "java": {
+     "refract": null
+    }
+   },
+   "truth": {
+    "python": false,
+    "js": false,
+    "java": false
+   }
+  },
+  {
+   "id": 50,
+   "kind": "everyday",
+   "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+   "refract": {
+    "python": {
+     "predicted": "linear",
+     "measured": null,
+     "status": "predicted (no attack string makes it backtrack)",
+     "engine": "python 3.15.2"
+    },
+    "js": {
+     "predicted": "linear",
+     "measured": null,
+     "status": "predicted (no attack string makes it backtrack)",
+     "engine": "node 14.6.202.34-node.40"
+    },
+    "java": {
+     "predicted": "linear",
+     "measured": null,
+     "status": "predicted (no attack string makes it backtrack)",
+     "engine": "java 25.0.5.1"
+    }
+   },
+   "recheck": {
+    "status": "safe",
+    "complexity": {
+     "type": "safe",
+     "degree": null
+    },
+    "checker": "fuzz",
+    "attack": null
+   },
+   "regexploit": {
+    "vulnerable": false
+   },
+   "attacks_measured": {
+    "python": {
+     "refract": null
+    },
+    "js": {
+     "refract": null
+    },
+    "java": {
+     "refract": null
+    }
+   },
+   "truth": {
+    "python": false,
+    "js": false,
+    "java": false
+   }
+  },
+  {
+   "id": 51,
+   "kind": "everyday",
+   "pattern": "^[A-Z][a-z]*( [A-Z][a-z]*)*$",
+   "refract": {
+    "python": {
+     "predicted": "linear",
+     "measured": null,
+     "status": "predicted (no attack string makes it backtrack)",
+     "engine": "python 3.15.2"
+    },
+    "js": {
+     "predicted": "linear",
+     "measured": null,
+     "status": "predicted (no attack string makes it backtrack)",
+     "engine": "node 14.6.202.34-node.40"
+    },
+    "java": {
+     "predicted": "linear",
+     "measured": null,
+     "status": "predicted (no attack string makes it backtrack)",
+     "engine": "java 25.0.5.1"
+    }
+   },
+   "recheck": {
+    "status": "safe",
+    "complexity": {
+     "type": "linear",
+     "degree": null
+    },
+    "checker": "automaton",
+    "attack": null
+   },
+   "regexploit": {
+    "vulnerable": false
+   },
+   "attacks_measured": {
+    "python": {
+     "refract": null
+    },
+    "js": {
+     "refract": null
+    },
+    "java": {
+     "refract": null
+    }
+   },
+   "truth": {
+    "python": false,
+    "js": false,
+    "java": false
+   }
+  },
+  {
+   "id": 52,
+   "kind": "everyday",
+   "pattern": "^\\w+$",
+   "refract": {
+    "python": {
+     "predicted": "linear",
+     "measured": null,
+     "status": "predicted (no attack string makes it backtrack)",
+     "engine": "python 3.15.2"
+    },
+    "js": {
+     "predicted": "linear",
+     "measured": null,
+     "status": "predicted (no attack string makes it backtrack)",
+     "engine": "node 14.6.202.34-node.40"
+    },
+    "java": {
+     "predicted": "linear",
+     "measured": null,
+     "status": "predicted (no attack string makes it backtrack)",
+     "engine": "java 25.0.5.1"
+    }
+   },
+   "recheck": {
+    "status": "safe",
+    "complexity": {
+     "type": "linear",
+     "degree": null
+    },
+    "checker": "automaton",
+    "attack": null
+   },
+   "regexploit": {
+    "vulnerable": false
+   },
+   "attacks_measured": {
+    "python": {
+     "refract": null
+    },
+    "js": {
+     "refract": null
+    },
+    "java": {
+     "refract": null
+    }
+   },
+   "truth": {
+    "python": false,
+    "js": false,
+    "java": false
+   }
+  },
+  {
+   "id": 53,
+   "kind": "everyday",
+   "pattern": "^(ab)*$",
+   "refract": {
+    "python": {
+     "predicted": "linear",
+     "measured": null,
+     "status": "predicted (no attack string makes it backtrack)",
+     "engine": "python 3.15.2"
+    },
+    "js": {
+     "predicted": "linear",
+     "measured": null,
+     "status": "predicted (no attack string makes it backtrack)",
+     "engine": "node 14.6.202.34-node.40"
+    },
+    "java": {
+     "predicted": "linear",
+     "measured": null,
+     "status": "predicted (no attack string makes it backtrack)",
+     "engine": "java 25.0.5.1"
+    }
+   },
+   "recheck": {
+    "status": "safe",
+    "complexity": {
+     "type": "linear",
+     "degree": null
+    },
+    "checker": "automaton",
+    "attack": null
+   },
+   "regexploit": {
+    "vulnerable": false
+   },
+   "attacks_measured": {
+    "python": {
+     "refract": null
+    },
+    "js": {
+     "refract": null
+    },
+    "java": {
+     "refract": null
+    }
+   },
+   "truth": {
+    "python": false,
+    "js": false,
+    "java": false
+   }
+  },
+  {
+   "id": 54,
+   "kind": "everyday",
+   "pattern": "\\\"[^\\\"]*\\\"",
+   "refract": {
+    "python": {
+     "predicted": "linear",
+     "measured": null,
+     "status": "predicted (no attack string makes it backtrack)",
+     "engine": "python 3.15.2"
+    },
+    "js": {
+     "predicted": "linear",
+     "measured": null,
+     "status": "predicted (no attack string makes it backtrack)",
+     "engine": "node 14.6.202.34-node.40"
+    },
+    "java": {
+     "predicted": "linear",
+     "measured": null,
+     "status": "predicted (no attack string makes it backtrack)",
+     "engine": "java 25.0.5.1"
+    }
+   },
+   "recheck": {
+    "status": "safe",
+    "complexity": {
+     "type": "linear",
+     "degree": null
+    },
+    "checker": "automaton",
+    "attack": null
+   },
+   "regexploit": {
+    "vulnerable": false
+   },
+   "attacks_measured": {
+    "python": {
+     "refract": null
+    },
+    "js": {
+     "refract": null
+    },
+    "java": {
+     "refract": null
+    }
+   },
+   "truth": {
+    "python": false,
+    "js": false,
+    "java": false
+   }
+  },
+  {
+   "id": 55,
+   "kind": "everyday",
+   "pattern": "^\\s*$",
+   "refract": {
+    "python": {
+     "predicted": "linear",
+     "measured": null,
+     "status": "predicted (no attack string makes it backtrack)",
+     "engine": "python 3.15.2"
+    },
+    "js": {
+     "predicted": "linear",
+     "measured": null,
+     "status": "predicted (no attack string makes it backtrack)",
+     "engine": "node 14.6.202.34-node.40"
+    },
+    "java": {
+     "predicted": "linear",
+     "measured": null,
+     "status": "predicted (no attack string makes it backtrack)",
+     "engine": "java 25.0.5.1"
+    }
+   },
+   "recheck": {
+    "status": "safe",
+    "complexity": {
+     "type": "linear",
+     "degree": null
+    },
+    "checker": "automaton",
+    "attack": null
+   },
+   "regexploit": {
+    "vulnerable": false
+   },
+   "attacks_measured": {
+    "python": {
+     "refract": null
+    },
+    "js": {
+     "refract": null
+    },
+    "java": {
+     "refract": null
+    }
+   },
+   "truth": {
+    "python": false,
+    "js": false,
+    "java": false
+   }
+  },
+  {
+   "id": 56,
+   "kind": "everyday",
+   "pattern": "^\\+?\\d+$",
+   "refract": {
+    "python": {
+     "predicted": "linear",
+     "measured": null,
+     "status": "predicted (no attack string makes it backtrack)",
+     "engine": "python 3.15.2"
+    },
+    "js": {
+     "predicted": "linear",
+     "measured": null,
+     "status": "predicted (no attack string makes it backtrack)",
+     "engine": "node 14.6.202.34-node.40"
+    },
+    "java": {
+     "predicted": "linear",
+     "measured": null,
+     "status": "predicted (no attack string makes it backtrack)",
+     "engine": "java 25.0.5.1"
+    }
+   },
+   "recheck": {
+    "status": "safe",
+    "complexity": {
+     "type": "linear",
+     "degree": null
+    },
+    "checker": "automaton",
+    "attack": null
+   },
+   "regexploit": {
+    "vulnerable": false
+   },
+   "attacks_measured": {
+    "python": {
+     "refract": null
+    },
+    "js": {
+     "refract": null
+    },
+    "java": {
+     "refract": null
+    }
+   },
+   "truth": {
+    "python": false,
+    "js": false,
+    "java": false
+   }
+  },
+  {
+   "id": 57,
+   "kind": "everyday",
+   "pattern": "^(?:\\d+,)*\\d+$",
+   "refract": {
+    "python": {
+     "predicted": "linear",
+     "measured": null,
+     "status": "predicted (no attack string makes it backtrack)",
+     "engine": "python 3.15.2"
+    },
+    "js": {
+     "predicted": "linear",
+     "measured": null,
+     "status": "predicted (no attack string makes it backtrack)",
+     "engine": "node 14.6.202.34-node.40"
+    },
+    "java": {
+     "predicted": "linear",
+     "measured": null,
+     "status": "predicted (no attack string makes it backtrack)",
+     "engine": "java 25.0.5.1"
+    }
+   },
+   "recheck": {
+    "status": "safe",
+    "complexity": {
+     "type": "linear",
+     "degree": null
+    },
+    "checker": "automaton",
+    "attack": null
+   },
+   "regexploit": {
+    "vulnerable": false
+   },
+   "attacks_measured": {
+    "python": {
+     "refract": null
+    },
+    "js": {
+     "refract": null
+    },
+    "java": {
+     "refract": null
+    }
+   },
+   "truth": {
+    "python": false,
+    "js": false,
+    "java": false
+   }
+  },
+  {
+   "id": 58,
+   "kind": "everyday",
+   "pattern": "^([a-z]+-)*[a-z]+$",
+   "refract": {
+    "python": {
+     "predicted": "linear",
+     "measured": null,
+     "status": "predicted (no attack string makes it backtrack)",
+     "engine": "python 3.15.2"
+    },
+    "js": {
+     "predicted": "linear",
+     "measured": null,
+     "status": "predicted (no attack string makes it backtrack)",
+     "engine": "node 14.6.202.34-node.40"
+    },
+    "java": {
+     "predicted": "linear",
+     "measured": null,
+     "status": "predicted (no attack string makes it backtrack)",
+     "engine": "java 25.0.5.1"
+    }
+   },
+   "recheck": {
+    "status": "safe",
+    "complexity": {
+     "type": "linear",
+     "degree": null
+    },
+    "checker": "automaton",
+    "attack": null
+   },
+   "regexploit": {
+    "vulnerable": false
+   },
+   "attacks_measured": {
+    "python": {
+     "refract": null
+    },
+    "js": {
+     "refract": null
+    },
+    "java": {
+     "refract": null
+    }
+   },
+   "truth": {
+    "python": false,
+    "js": false,
+    "java": false
+   }
+  },
+  {
+   "id": 59,
+   "kind": "everyday",
+   "pattern": "^/[a-z/]*$",
+   "refract": {
+    "python": {
+     "predicted": "linear",
+     "measured": null,
+     "status": "predicted (no attack string makes it backtrack)",
+     "engine": "python 3.15.2"
+    },
+    "js": {
+     "predicted": "linear",
+     "measured": null,
+     "status": "predicted (no attack string makes it backtrack)",
+     "engine": "node 14.6.202.34-node.40"
+    },
+    "java": {
+     "predicted": "linear",
+     "measured": null,
+     "status": "predicted (no attack string makes it backtrack)",
+     "engine": "java 25.0.5.1"
+    }
+   },
+   "recheck": {
+    "status": "safe",
+    "complexity": {
+     "type": "linear",
+     "degree": null
+    },
+    "checker": "automaton",
+    "attack": null
+   },
+   "regexploit": {
+    "vulnerable": false
+   },
+   "attacks_measured": {
+    "python": {
+     "refract": null
+    },
+    "js": {
+     "refract": null
+    },
+    "java": {
+     "refract": null
+    }
+   },
+   "truth": {
+    "python": false,
+    "js": false,
+    "java": false
+   }
+  },
+  {
+   "id": 60,
+   "kind": "everyday",
+   "pattern": "^(a|b|c)+$",
+   "refract": {
+    "python": {
+     "predicted": "linear",
+     "measured": null,
+     "status": "predicted (no attack string makes it backtrack)",
+     "engine": "python 3.15.2"
+    },
+    "js": {
+     "predicted": "linear",
+     "measured": null,
+     "status": "predicted (no attack string makes it backtrack)",
+     "engine": "node 14.6.202.34-node.40"
+    },
+    "java": {
+     "predicted": "linear",
+     "measured": null,
+     "status": "predicted (no attack string makes it backtrack)",
+     "engine": "java 25.0.5.1"
+    }
+   },
+   "recheck": {
+    "status": "safe",
+    "complexity": {
+     "type": "linear",
+     "degree": null
+    },
+    "checker": "automaton",
+    "attack": null
+   },
+   "regexploit": {
+    "vulnerable": false
+   },
+   "attacks_measured": {
+    "python": {
+     "refract": null
+    },
+    "js": {
+     "refract": null
+    },
+    "java": {
+     "refract": null
+    }
+   },
+   "truth": {
+    "python": false,
+    "js": false,
+    "java": false
+   }
+  },
+  {
+   "id": 61,
+   "kind": "everyday",
+   "pattern": "^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$",
+   "refract": {
+    "python": {
+     "predicted": "polynomial O(n^2)",
+     "measured": "polynomial ~n^1.9",
+     "status": "confirmed",
+     "engine": "python 3.15.2"
+    },
+    "js": {
+     "predicted": "polynomial O(n^2)",
+     "measured": "polynomial ~n^1.8",
+     "status": "confirmed",
+     "engine": "node 14.6.202.34-node.40"
+    },
+    "java": {
+     "predicted": "polynomial O(n^2)",
+     "measured": "polynomial ~n^1.9",
+     "status": "confirmed",
+     "engine": "java 25.0.5.1"
+    }
+   },
+   "recheck": {
+    "status": "vulnerable",
+    "complexity": {
+     "type": "polynomial",
+     "degree": 2
+    },
+    "checker": "automaton",
+    "attack": {
+     "prefix": "",
+     "leads": [
+      "\u0000@\u0000"
+     ],
+     "pumps": [
+      ".\u0000"
+     ],
+     "suffix": ".@..\u0000"
+    }
+   },
+   "regexploit": {
+    "vulnerable": false
+   },
+   "attacks_measured": {
+    "python": {
+     "refract": true,
+     "recheck": true
+    },
+    "js": {
+     "refract": true,
+     "recheck": true
+    },
+    "java": {
+     "refract": true,
+     "recheck": true
+    }
+   },
+   "truth": {
+    "python": true,
+    "js": true,
+    "java": true
+   }
+  },
+  {
+   "id": 62,
+   "kind": "everyday",
+   "pattern": "^(?:[01]\\d|2[0-3]):[0-5]\\d$",
+   "refract": {
+    "python": {
+     "predicted": "linear",
+     "measured": null,
+     "status": "predicted (no attack string makes it backtrack)",
+     "engine": "python 3.15.2"
+    },
+    "js": {
+     "predicted": "linear",
+     "measured": null,
+     "status": "predicted (no attack string makes it backtrack)",
+     "engine": "node 14.6.202.34-node.40"
+    },
+    "java": {
+     "predicted": "linear",
+     "measured": null,
+     "status": "predicted (no attack string makes it backtrack)",
+     "engine": "java 25.0.5.1"
+    }
+   },
+   "recheck": {
+    "status": "safe",
+    "complexity": {
+     "type": "safe",
+     "degree": null
+    },
+    "checker": "automaton",
+    "attack": null
+   },
+   "regexploit": {
+    "vulnerable": false
+   },
+   "attacks_measured": {
+    "python": {
+     "refract": null
+    },
+    "js": {
+     "refract": null
+    },
+    "java": {
+     "refract": null
+    }
+   },
+   "truth": {
+    "python": false,
+    "js": false,
+    "java": false
+   }
+  },
+  {
+   "id": 63,
+   "kind": "everyday",
+   "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
+   "refract": {
+    "python": {
+     "predicted": "linear",
+     "measured": null,
+     "status": "predicted (no attack string makes it backtrack)",
+     "engine": "python 3.15.2"
+    },
+    "js": {
+     "predicted": "linear",
+     "measured": null,
+     "status": "predicted (no attack string makes it backtrack)",
+     "engine": "node 14.6.202.34-node.40"
+    },
+    "java": {
+     "predicted": "linear",
+     "measured": null,
+     "status": "predicted (no attack string makes it backtrack)",
+     "engine": "java 25.0.5.1"
+    }
+   },
+   "recheck": {
+    "status": "safe",
+    "complexity": {
+     "type": "linear",
+     "degree": null
+    },
+    "checker": "automaton",
+    "attack": null
+   },
+   "regexploit": {
+    "vulnerable": false
+   },
+   "attacks_measured": {
+    "python": {
+     "refract": null
+    },
+    "js": {
+     "refract": null
+    },
+    "java": {
+     "refract": null
+    }
+   },
+   "truth": {
+    "python": false,
+    "js": false,
+    "java": false
+   }
+  },
+  {
+   "id": 64,
+   "kind": "everyday",
+   "pattern": "^-?\\d+(\\.\\d+)?$",
+   "refract": {
+    "python": {
+     "predicted": "linear",
+     "measured": null,
+     "status": "predicted (no attack string makes it backtrack)",
+     "engine": "python 3.15.2"
+    },
+    "js": {
+     "predicted": "linear",
+     "measured": null,
+     "status": "predicted (no attack string makes it backtrack)",
+     "engine": "node 14.6.202.34-node.40"
+    },
+    "java": {
+     "predicted": "linear",
+     "measured": null,
+     "status": "predicted (no attack string makes it backtrack)",
+     "engine": "java 25.0.5.1"
+    }
+   },
+   "recheck": {
+    "status": "safe",
+    "complexity": {
+     "type": "linear",
+     "degree": null
+    },
+    "checker": "automaton",
+    "attack": null
+   },
+   "regexploit": {
+    "vulnerable": false
+   },
+   "attacks_measured": {
+    "python": {
+     "refract": null
+    },
+    "js": {
+     "refract": null
+    },
+    "java": {
+     "refract": null
+    }
+   },
+   "truth": {
+    "python": false,
+    "js": false,
+    "java": false
+   }
+  },
+  {
+   "id": 65,
+   "kind": "everyday",
+   "pattern": "^(?:\\w+\\.)*\\w+$",
+   "refract": {
+    "python": {
+     "predicted": "linear",
+     "measured": null,
+     "status": "predicted (no attack string makes it backtrack)",
+     "engine": "python 3.15.2"
+    },
+    "js": {
+     "predicted": "linear",
+     "measured": null,
+     "status": "predicted (no attack string makes it backtrack)",
+     "engine": "node 14.6.202.34-node.40"
+    },
+    "java": {
+     "predicted": "linear",
+     "measured": null,
+     "status": "predicted (no attack string makes it backtrack)",
+     "engine": "java 25.0.5.1"
+    }
+   },
+   "recheck": {
+    "status": "safe",
+    "complexity": {
+     "type": "linear",
+     "degree": null
+    },
+    "checker": "automaton",
+    "attack": null
+   },
+   "regexploit": {
+    "vulnerable": false
+   },
+   "attacks_measured": {
+    "python": {
+     "refract": null
+    },
+    "js": {
+     "refract": null
+    },
+    "java": {
+     "refract": null
+    }
+   },
+   "truth": {
+    "python": false,
+    "js": false,
+    "java": false
+   }
+  }
+ ]
+}
