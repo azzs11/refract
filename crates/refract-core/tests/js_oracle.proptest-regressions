@@ -1,0 +1,13 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc 7f700e28dde3c43b9944f51f88e61c99a3b16bfecb98c394e72ef5ecb091b1ef # shrinks to (src, flags) = ("a", "")
+cc da18e18d128a5ceb5375dd1345227f7c7f1fb1598202694149babc43853fe666 # shrinks to ((src, flags), hay) = (("{", "i"), [""])
+cc 642ca54f74df7bf80f01c7e98ac3915bd6ad4f0b964e8528276d8f69300e845d # shrinks to ((src, flags), hay) = (("|", "mu"), ["😀"])
+cc 94864c91d7ed5d3e78046eb3cc0db8ec4685535cecc16f991ab4ce53909e245c # shrinks to ((src, flags), hay) = (("\\d", "su"), ["1", "1"])
+cc e77356a13a3dbb840db10722e7ed8124fd4be0c35d04de64376d8721fcfe082b # shrinks to ((src, flags), hay) = (("k", "i"), ["K"])
+cc efc81d126313322d9947f3885c8d108a6d2f5299616f7ba43041d819775bf318 # shrinks to ((src, flags), hay) = (("\\B", "iu"), ["aéa😀a"])
+cc 46ef73e7c2ed0e9076ae6772dcb041d304bccc29cc751500c0ad3645f64173e7 # shrinks to ((src, flags), hay) = (("(?<!\\BK)$", "i"), ["ak"])
