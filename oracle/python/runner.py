@@ -4,6 +4,7 @@ import json
 import platform
 import re
 import sys
+import time
 import warnings
 
 warnings.simplefilter("ignore")  # FutureWarning for possible nested sets must not pollute stdout
@@ -17,6 +18,14 @@ def handle(req):
     except (re.error, OverflowError, RecursionError, ValueError) as e:
         return {"id": req["id"], "ok": False, "error": str(e)}
     op = req.get("op", "full")
+    if op == "time":
+        run = rx.fullmatch if req.get("mode", "full") == "full" else rx.search
+        times = []
+        for s in req.get("inputs", []):
+            t0 = time.perf_counter_ns()
+            run(s)
+            times.append(time.perf_counter_ns() - t0)
+        return {"id": req["id"], "ok": True, "times": times}
     if op == "compile":
         return {"id": req["id"], "ok": True, "results": []}
     run = rx.fullmatch if op == "full" else rx.search

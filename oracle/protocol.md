@@ -28,6 +28,13 @@ Special request `{"id": 0, "op": "version"}` returns the engine and its version.
 
 `ok: false` means the engine rejected the pattern. Results are booleans in input order.
 
+Timing request (ReDoS lab): `{"id": 9, "op": "time", "mode": "full"|"search", "pattern": …,
+"inputs": [haystack]}` → `{"id": 9, "ok": true, "times": [nanoseconds]}`: wall-clock time of the
+match call alone, measured inside the runner. The harness kills a runner that does not answer
+within its timeout (Docker: `docker kill` on the named container) and starts a fresh one.
+JavaScript times full matches as `^(?:p)$` without `m` (a look-ahead wrapper would disable V8's
+linear fallback).
+
 ## Operations per engine
 
 | Engine | `full` | `search` |

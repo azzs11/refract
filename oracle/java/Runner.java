@@ -39,6 +39,22 @@ public class Runner {
         } catch (StackOverflowError e) {
             return "{\"id\":" + id + ",\"ok\":false,\"error\":\"stack overflow while compiling\"}";
         }
+        if ("time".equals(op)) {
+            StringBuilder tb = new StringBuilder("{\"id\":" + id + ",\"ok\":true,\"times\":[");
+            boolean full = "full".equals(req.get("mode"));
+            List<?> inputs = (List<?>) req.get("inputs");
+            for (int i = 0; inputs != null && i < inputs.size(); i++) {
+                Matcher m = p.matcher((String) inputs.get(i));
+                long t0 = System.nanoTime();
+                try {
+                    if (full) m.matches(); else m.find();
+                } catch (StackOverflowError e) {
+                    // Deep backtracking can overflow the stack: report as very slow.
+                }
+                tb.append(i == 0 ? "" : ",").append(System.nanoTime() - t0);
+            }
+            return tb.append("]}").toString();
+        }
         StringBuilder sb = new StringBuilder("{\"id\":" + id + ",\"ok\":true,\"results\":[");
         if (!"compile".equals(op)) {
             List<?> inputs = (List<?>) req.get("inputs");

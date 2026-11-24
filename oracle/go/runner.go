@@ -8,6 +8,7 @@ import (
 	"regexp"
 	"regexp/syntax"
 	"runtime"
+	"time"
 )
 
 type request struct {
@@ -15,13 +16,15 @@ type request struct {
 	Pattern string   `json:"pattern"`
 	Op      string   `json:"op"`
 	Inputs  []string `json:"inputs"`
+	Mode    string   `json:"mode"`
 }
 
 type response struct {
 	ID      int64  `json:"id"`
 	OK      bool   `json:"ok"`
 	Error   string `json:"error,omitempty"`
-	Results []bool `json:"results"`
+	Results []bool  `json:"results"`
+	Times   []int64 `json:"times,omitempty"`
 	Engine  string `json:"engine,omitempty"`
 	Version string `json:"version,omitempty"`
 }
@@ -34,7 +37,8 @@ func handle(req request) response {
 		return response{ID: req.ID, OK: false, Error: err.Error()}
 	}
 	src := req.Pattern
-	if req.Op == "full" {
+	full := req.Op == "full" || (req.Op == "time" && req.Mode == "full")
+	if full {
 		// Wrap the parsed tree's canonical form, not the raw text: an unterminated \Q would
 		// otherwise swallow the wrapper. \A and \z are haystack edges whatever the flags.
 		tree, err := syntax.Parse(req.Pattern, syntax.Perl)
@@ -46,6 +50,15 @@ func handle(req request) response {
 	rx, err := regexp.Compile(src)
 	if err != nil {
 		return response{ID: req.ID, OK: false, Error: "wrapped: " + err.Error()}
+	}
+	if req.Op == "time" {
+		times := []int64{}
+		for _, s := range req.Inputs {
+			t0 := time.Now()
+			rx.MatchString(s)
+			times = append(times, time.Since(t0).Nanoseconds())
+		}
+		return response{ID: req.ID, OK: true, Results: []bool{}, Times: times}
 	}
 	results := []bool{}
 	if req.Op != "compile" {

@@ -3,7 +3,7 @@
 
 function handle(req) {
   if (req.op === "version") {
-    return { id: req.id, ok: true, engine: "v8", version: process.versions.v8, node: process.version };
+    return { id: req.id, ok: true, engine: "v8", version: process.versions.v8, node: process.version, options: process.execArgv };
   }
   const flags = req.flags ?? "";
   let rx;
@@ -20,6 +20,23 @@ function handle(req) {
     return { id: req.id, ok: false, error: String(e.message) };
   }
   if (req.op === "compile") return { id: req.id, ok: true, results: [] };
+  if (req.op === "time") {
+    // Full match: `^(?:p)$` when there is no m flag (a look-ahead wrapper would switch off
+    // V8's linear fallback and so change what is measured); else the sticky wrapper.
+    const plain = flags.replace("y", "");
+    const timed = req.mode !== "full"
+      ? new RegExp(req.pattern, flags)
+      : plain.includes("m")
+        ? new RegExp(`(?:${req.pattern})(?![\\s\\S])`, plain + "y")
+        : new RegExp(`^(?:${req.pattern})$`, plain);
+    const times = (req.inputs ?? []).map((s) => {
+      timed.lastIndex = 0;
+      const t0 = process.hrtime.bigint();
+      timed.test(s);
+      return Number(process.hrtime.bigint() - t0);
+    });
+    return { id: req.id, ok: true, times };
+  }
   return { id: req.id, ok: true, // lastIndex persists across test() calls with g or y: reset it for every input.
     results: (req.inputs ?? []).map((s) => { rx.lastIndex = 0; return rx.test(s); }) };
 }

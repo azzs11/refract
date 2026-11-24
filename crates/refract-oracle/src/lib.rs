@@ -14,7 +14,10 @@
 
 use serde_json::{Value, json};
 use std::io::{self, BufRead, BufReader, Write};
-use std::process::{Child, ChildStdin, ChildStdout, Command, Stdio};
+use std::process::{Child, ChildStdin, Command, Stdio};
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::mpsc::{self, Receiver, RecvTimeoutError};
+use std::time::Duration;
 
 const PYTHON_RUNNER: &str = include_str!("../../../oracle/python/runner.py");
 const NODE_RUNNER: &str = include_str!("../../../oracle/node/runner.mjs");
@@ -89,24 +92,52 @@ pub enum Outcome {
     Matched(Vec<bool>),
 }
 
+/// The result of timing one haystack.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Timing {
+    /// Wall-clock time of the match call inside the runner.
+    Took(Duration),
+    /// The runner did not answer in time; it was killed and must be respawned.
+    TimedOut,
+    /// The engine rejected the pattern.
+    Rejected(String),
+}
+
 /// A running engine.
 pub struct Engine {
     kind: EngineKind,
     child: Child,
     stdin: ChildStdin,
-    stdout: BufReader<ChildStdout>,
+    lines: Receiver<io::Result<String>>,
     next_id: u64,
     version: String,
+    /// Container name in Docker mode (killed on timeout: killing the client is not enough).
+    container: Option<String>,
+    dead: bool,
 }
+
+static CONTAINERS: AtomicU64 = AtomicU64::new(0);
 
 impl Engine {
     /// Starts the runner and asks it for its version.
     pub fn spawn(kind: EngineKind, mode: Mode) -> io::Result<Engine> {
+        Engine::spawn_with(kind, mode, &[])
+    }
+
+    /// Like [`Engine::spawn`], passing `engine_args` to the engine itself (Node only, e.g.
+    /// `--enable-experimental-regexp-engine-on-excessive-backtracks`).
+    pub fn spawn_with(kind: EngineKind, mode: Mode, engine_args: &[&str]) -> io::Result<Engine> {
+        if !engine_args.is_empty() && kind != EngineKind::Node {
+            return Err(io::Error::other(
+                "engine arguments are supported for node only",
+            ));
+        }
         // Go and Java runners need a build step, so they always run in their pinned image.
         let mode = match kind {
             EngineKind::Go | EngineKind::Java => Mode::Docker,
             _ => mode,
         };
+        let mut container = None;
         let mut cmd = match mode {
             Mode::Native => match kind {
                 EngineKind::Python => {
@@ -116,14 +147,29 @@ impl Engine {
                 }
                 EngineKind::Node => {
                     let mut c = Command::new("node");
+                    c.args(engine_args);
                     c.args(["--input-type=module", "-e", NODE_RUNNER]);
                     c
                 }
                 EngineKind::Go | EngineKind::Java => unreachable!("docker-only engines"),
             },
             Mode::Docker => {
+                let name = format!(
+                    "refract-oracle-{}-{}-{}",
+                    kind.name(),
+                    std::process::id(),
+                    CONTAINERS.fetch_add(1, Ordering::Relaxed)
+                );
                 let mut c = Command::new("docker");
-                c.args(["run", "-i", "--rm", "--network=none", &kind.image()]);
+                c.args(["run", "-i", "--rm", "--network=none", "--name", &name]);
+                if engine_args.is_empty() {
+                    c.arg(kind.image());
+                } else {
+                    c.args(["--entrypoint", "node", &kind.image()]);
+                    c.args(engine_args);
+                    c.arg("/runner.mjs");
+                }
+                container = Some(name);
                 c
             }
         };
@@ -136,19 +182,33 @@ impl Engine {
             .stdin
             .take()
             .ok_or_else(|| io::Error::other("no stdin"))?;
-        let stdout = BufReader::new(
+        let mut stdout = BufReader::new(
             child
                 .stdout
                 .take()
                 .ok_or_else(|| io::Error::other("no stdout"))?,
         );
+        // A reader thread lets requests wait with a timeout.
+        let (tx, lines) = mpsc::channel();
+        std::thread::spawn(move || {
+            loop {
+                let mut line = String::new();
+                let r = stdout.read_line(&mut line);
+                let stop = !matches!(r, Ok(n) if n > 0);
+                if tx.send(r.map(|_| line)).is_err() || stop {
+                    break;
+                }
+            }
+        });
         let mut engine = Engine {
             kind,
             child,
             stdin,
-            stdout,
+            lines,
             next_id: 1,
             version: String::new(),
+            container,
+            dead: false,
         };
         let v = engine.request(json!({"id": 0, "op": "version"}))?;
         engine.version = v["version"].as_str().unwrap_or("?").to_string();
@@ -165,16 +225,101 @@ impl Engine {
     }
 
     fn request(&mut self, req: Value) -> io::Result<Value> {
+        self.request_within(req, None)?
+            .ok_or_else(|| io::Error::other("unreachable: no timeout"))
+    }
+
+    /// Sends a request and waits at most `timeout` (forever with `None`). `Ok(None)` means it
+    /// timed out: the runner is killed and this engine refuses further requests.
+    fn request_within(
+        &mut self,
+        req: Value,
+        timeout: Option<Duration>,
+    ) -> io::Result<Option<Value>> {
+        if self.dead {
+            return Err(io::Error::other(format!(
+                "{} runner was killed after a timeout",
+                self.kind.name()
+            )));
+        }
         writeln!(self.stdin, "{}", ascii_json(&req))?;
         self.stdin.flush()?;
-        let mut line = String::new();
-        if self.stdout.read_line(&mut line)? == 0 {
+        let got = match timeout {
+            None => self
+                .lines
+                .recv()
+                .map_err(|_| RecvTimeoutError::Disconnected),
+            Some(t) => self.lines.recv_timeout(t),
+        };
+        let line = match got {
+            Ok(line) => line?,
+            Err(RecvTimeoutError::Timeout) => {
+                self.kill();
+                return Ok(None);
+            }
+            Err(RecvTimeoutError::Disconnected) => String::new(),
+        };
+        if line.is_empty() {
+            self.dead = true;
             return Err(io::Error::other(format!(
                 "{} runner exited",
                 self.kind.name()
             )));
         }
-        serde_json::from_str(&line).map_err(io::Error::other)
+        serde_json::from_str(&line)
+            .map(Some)
+            .map_err(io::Error::other)
+    }
+
+    fn kill(&mut self) {
+        self.dead = true;
+        if let Some(name) = &self.container {
+            let _ = Command::new("docker")
+                .args(["kill", name])
+                .stdout(Stdio::null())
+                .stderr(Stdio::null())
+                .status();
+        }
+        let _ = self.child.kill();
+        let _ = self.child.wait();
+    }
+
+    /// `false` once the runner was killed (after a timeout) or exited.
+    pub fn is_alive(&self) -> bool {
+        !self.dead
+    }
+
+    /// Times one match of `pattern` on `input` inside the runner (full match or search, with
+    /// engine `flags`), waiting at most `timeout`.
+    pub fn time(
+        &mut self,
+        pattern: &str,
+        flags: &str,
+        full: bool,
+        input: &str,
+        timeout: Duration,
+    ) -> io::Result<Timing> {
+        let id = self.next_id;
+        self.next_id += 1;
+        let req = json!({
+            "id": id, "pattern": pattern, "flags": flags, "op": "time",
+            "mode": if full { "full" } else { "search" }, "inputs": [input],
+        });
+        let Some(resp) = self.request_within(req, Some(timeout))? else {
+            return Ok(Timing::TimedOut);
+        };
+        if resp["ok"].as_bool() != Some(true) {
+            return Ok(Timing::Rejected(
+                resp["error"]
+                    .as_str()
+                    .unwrap_or("unknown error")
+                    .to_string(),
+            ));
+        }
+        let ns = resp["times"][0]
+            .as_u64()
+            .ok_or_else(|| io::Error::other(format!("runner sent no time: {resp}")))?;
+        Ok(Timing::Took(Duration::from_nanos(ns)))
     }
 
     /// Compiles `pattern` and runs it on every input under `op`.
@@ -236,8 +381,18 @@ fn ascii_json(v: &Value) -> String {
 
 impl Drop for Engine {
     fn drop(&mut self) {
-        let _ = self.child.kill();
-        let _ = self.child.wait();
+        if !self.dead {
+            // Kill the client; in Docker mode also the named container, which survives it.
+            let _ = self.child.kill();
+            let _ = self.child.wait();
+            if let Some(name) = &self.container {
+                let _ = Command::new("docker")
+                    .args(["kill", name])
+                    .stdout(Stdio::null())
+                    .stderr(Stdio::null())
+                    .status();
+            }
+        }
     }
 }
 
@@ -281,6 +436,24 @@ mod tests {
         assert_eq!(out, Outcome::Matched(vec![false, false, false]));
         let out = js.run("b", Op::Search, &["b"]).unwrap();
         assert_eq!(out, Outcome::Matched(vec![true]));
+    }
+
+    #[test]
+    fn timing_and_timeouts() {
+        let Some(mut py) = engine(EngineKind::Python) else {
+            return;
+        };
+        let t = py
+            .time("^(a+)+$", "", true, "aaaa!", Duration::from_secs(5))
+            .unwrap();
+        assert!(matches!(t, Timing::Took(_)), "{t:?}");
+        let slow = format!("{}!", "a".repeat(40));
+        let t = py
+            .time("^(a+)+$", "", true, &slow, Duration::from_millis(300))
+            .unwrap();
+        assert_eq!(t, Timing::TimedOut);
+        assert!(!py.is_alive());
+        assert!(py.run("a", Op::Full, &["a"]).is_err());
     }
 
     #[test]
