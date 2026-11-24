@@ -120,6 +120,12 @@ impl Builder<'_> {
                 let d = self.sub_dfa(x)?.complement();
                 self.embed(&d, s, e)?;
             }
+            Re::Fix { .. } | Re::Var(_) => {
+                return Err(crate::error::Error::unsupported(
+                    crate::error::Span::default(),
+                    "the Thompson reference engine has no recursive terms; use the derivative engine",
+                ));
+            }
             Re::Behind { .. } => {
                 return Err(crate::error::Error::unsupported(
                     crate::error::Span::default(),

@@ -44,3 +44,37 @@ proptest! {
         }
     }
 }
+
+proptest! {
+    #![proptest_config(ProptestConfig::with_cases(cases(5_000)))]
+
+    /// Fixed points `X = k | r·X` (look-ahead inside unbounded repetition, ADR-0008), with
+    /// look-ahead-style intersections and look-behinds inside, against unfolding semantics.
+    #[test]
+    fn fixed_points_match_direct_semantics(
+        r in arb_re_with_behind(),
+        k in arb_re_with_behind(),
+        guard in arb_re_with_behind(),
+        inputs in prop::collection::vec(arb_input(), 1..10),
+    ) {
+        use refract_core::Re;
+        // r constrained by a look-ahead on the rest of the input: (rΣ* ∩ guardΣ*) style.
+        let step = Re::And(vec![
+            Re::Concat(vec![r.clone(), Re::Var(0)]),
+            Re::Concat(vec![guard, Re::any_star()]),
+        ]);
+        let fix = Re::Fix { var: 0, body: Box::new(Re::Alt(vec![k, step])) };
+        let budget = Budget::small().start();
+        let alpha = alphabet_for(&[&fix]);
+        let m = match dfa(&fix, &alpha, Engine::Derivative, &budget) {
+            Ok(m) => m,
+            Err(e) => {
+                prop_assert_eq!(e.kind, ErrorKind::Budget, "{}", e.message);
+                return Ok(());
+            }
+        };
+        for s in &inputs {
+            prop_assert_eq!(m.accepts(s), fix.matches_naive(s), "{:?} for {}", s, fix);
+        }
+    }
+}

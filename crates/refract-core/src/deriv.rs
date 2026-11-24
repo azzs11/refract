@@ -36,6 +36,8 @@ enum T {
     Loop(Id, u32, Option<u32>),
     /// Look-behind number `.0` (an index into `Store::behinds`), negated when `.1`.
     Behind(u32, bool),
+    /// Recursion variable number `.0`; its definition is `Store::defs[.0]` (a `Fix`).
+    Var(u32),
 }
 
 /// Context id meaning "irrelevant": used for terms without look-behinds.
@@ -58,6 +60,14 @@ pub struct Store {
     ctx_ids: HashMap<Vec<usize>, u32>,
     ctx_steps: HashMap<(u32, u32), u32>,
     null_memo: HashMap<(Id, u32), bool>,
+    /// Per term: does it reach a recursion variable?
+    has_var: Vec<bool>,
+    /// Definitions of recursion variables.
+    defs: Vec<Id>,
+    /// `Re` variable → store variable while interning a `Fix` body.
+    env: Vec<(u32, Id)>,
+    /// Variables being unfolded right now (least-fixed-point guards).
+    in_progress: Vec<u32>,
 }
 
 const NOTHING: Id = 0;
@@ -79,6 +89,10 @@ impl Store {
             ctx_ids: HashMap::new(),
             ctx_steps: HashMap::new(),
             null_memo: HashMap::new(),
+            has_var: Vec::new(),
+            defs: Vec::new(),
+            env: Vec::new(),
+            in_progress: Vec::new(),
         };
         let n = s.intern(T::Nothing);
         let e = s.intern(T::Eps);
@@ -101,14 +115,24 @@ impl Store {
         let hb = |x: &Id| self.has_behind[*x as usize];
         let has_behind = match &t {
             T::Behind(..) => true,
+            // A variable's definition may contain look-behinds: be conservative.
+            T::Var(_) => true,
             T::Nothing | T::Eps | T::Set(_) => false,
             T::Concat(a, b) => hb(a) || hb(b),
             T::Alt(xs) | T::And(xs) => xs.iter().any(hb),
             T::Not(x) | T::Loop(x, _, _) => hb(x),
         };
+        let hv = |x: &Id| self.has_var[*x as usize];
+        let has_var = match &t {
+            T::Var(_) => true,
+            T::Nothing | T::Eps | T::Set(_) | T::Behind(..) => false,
+            T::Concat(a, b) => hv(a) || hv(b),
+            T::Alt(xs) | T::And(xs) => xs.iter().any(hv),
+            T::Not(x) | T::Loop(x, _, _) => hv(x),
+        };
         // Static nullability; meaningless (and never consulted) for terms with look-behinds.
         let nullable = match &t {
-            T::Nothing | T::Set(_) | T::Behind(..) => false,
+            T::Nothing | T::Set(_) | T::Behind(..) | T::Var(_) => false,
             T::Eps => true,
             T::Concat(a, b) => self.nullable[*a as usize] && self.nullable[*b as usize],
             T::Alt(xs) => xs.iter().any(|&x| self.nullable[x as usize]),
@@ -120,6 +144,7 @@ impl Store {
         self.terms.push(t.clone());
         self.nullable.push(nullable);
         self.has_behind.push(has_behind);
+        self.has_var.push(has_var);
         self.ids.insert(t, id);
         id
     }
@@ -176,13 +201,22 @@ impl Store {
 
     /// Nullability of `id` at a position whose look-behind context is `ctx`.
     pub fn nullable(&mut self, id: Id, ctx: u32) -> bool {
-        if !self.has_behind[id as usize] {
+        if !self.has_behind[id as usize] && !self.has_var[id as usize] {
             return self.nullable[id as usize];
         }
         if let Some(&v) = self.null_memo.get(&(id, ctx)) {
             return v;
         }
         let v = match self.terms[id as usize].clone() {
+            // Least fixed point: a re-entrant variable contributes "not nullable".
+            T::Var(n) if self.in_progress.contains(&n) => false,
+            T::Var(n) => {
+                self.in_progress.push(n);
+                let d = self.defs[n as usize];
+                let v = self.nullable(d, ctx);
+                self.in_progress.pop();
+                v
+            }
             T::Behind(i, negated) => {
                 let q = self.ctxs[ctx as usize][i as usize];
                 self.behinds[i as usize].accepting[q] != negated
@@ -195,7 +229,10 @@ impl Store {
             T::Nothing | T::Set(_) => false,
             T::Eps => true,
         };
-        self.null_memo.insert((id, ctx), v);
+        // Only cache results that do not depend on an unfinished fixed point.
+        if self.in_progress.is_empty() || !self.has_var[id as usize] {
+            self.null_memo.insert((id, ctx), v);
+        }
         v
     }
 
@@ -310,7 +347,7 @@ impl Store {
         }
         // A nullable body makes the lower bound irrelevant: r{n,m} = r{0,m}. Not for bodies
         // with look-behinds, whose nullability depends on the position.
-        let min = if !self.has_behind(r) && self.nullable[r as usize] {
+        let min = if !self.has_behind(r) && !self.has_var[r as usize] && self.nullable[r as usize] {
             0
         } else {
             min
@@ -365,6 +402,25 @@ impl Store {
                 let id = self.from_re(r, budget)?;
                 self.repeat(id, *min, *max)
             }
+            Re::Fix { var, body } => {
+                let n = self.defs.len() as u32;
+                self.defs.push(NOTHING);
+                let v = self.intern(T::Var(n));
+                self.env.push((*var, v));
+                let b = self.from_re(body, budget);
+                self.env.pop();
+                self.defs[n as usize] = b?;
+                v
+            }
+            Re::Var(var) => match self.env.iter().rev().find(|(w, _)| w == var) {
+                Some(&(_, v)) => v,
+                None => {
+                    return Err(crate::error::Error::unsupported(
+                        crate::error::Span::default(),
+                        "internal: unbound recursion variable",
+                    ));
+                }
+            },
             Re::Behind { sub, negated } => {
                 if sub.has_behind() {
                     return Err(crate::error::Error::unsupported(
@@ -375,7 +431,10 @@ impl Store {
                 let idx = match self.behind_ids.get(sub.as_ref()) {
                     Some(&i) => i,
                     None => {
-                        let lang = Re::Concat(vec![Re::any_star(), sub.as_ref().clone()]);
+                        // Σ* over this alphabet's whole universe (¬∅), which includes pseudo
+                        // code units when the pattern matches UTF-16 (ADR-0007).
+                        let lang =
+                            Re::Concat(vec![Re::Not(Box::new(Re::Nothing)), sub.as_ref().clone()]);
                         let dfa = to_dfa(&lang, &self.alphabet, budget)?;
                         let i = self.behinds.len() as u32;
                         self.behinds.push(dfa);
@@ -398,6 +457,16 @@ impl Store {
         self.check(budget)?;
         let d = match self.terms[id as usize].clone() {
             T::Nothing | T::Eps | T::Behind(..) => NOTHING,
+            // Least fixed point: re-entry is only reachable through iterations that consumed
+            // nothing, which add nothing.
+            T::Var(n) if self.in_progress.contains(&n) => return Ok(NOTHING),
+            T::Var(n) => {
+                self.in_progress.push(n);
+                let def = self.defs[n as usize];
+                let r = self.derive(def, ctx, c, budget);
+                self.in_progress.pop();
+                r?
+            }
             T::Set(m) => {
                 if m.contains(c as usize) {
                     EPS
@@ -449,7 +518,9 @@ impl Store {
                 }
             }
         };
-        self.cache.insert((id, ctx, c), d);
+        if self.in_progress.is_empty() || !self.has_var[id as usize] {
+            self.cache.insert((id, ctx, c), d);
+        }
         Ok(d)
     }
 
@@ -486,6 +557,7 @@ impl Store {
                 max.map_or(String::new(), |m| m.to_string())
             ),
             T::Behind(i, negated) => format!("(?<{}#{i})", if *negated { "!" } else { "=" }),
+            T::Var(n) => format!("x{n}"),
         }
     }
 }

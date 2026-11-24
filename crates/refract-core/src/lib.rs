@@ -18,12 +18,14 @@ pub mod dfa;
 pub mod equiv;
 pub mod error;
 pub mod flavor;
+pub mod interp;
 pub mod ir;
 pub mod minimize;
 pub mod regular;
 pub mod tables;
 pub mod thompson;
 pub mod unicode;
+pub mod utf16;
 
 pub use automata::Engine;
 pub use budget::Budget;

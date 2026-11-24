@@ -29,7 +29,9 @@ pub struct Regex {
 pub struct Quirks {
     /// V8 with `u`: search also tries positions inside a surrogate pair, where `^ $ \b` are
     /// false, `\B` is true and look-arounds see no characters (docs/findings.md).
-    pub v8_mid_surrogate_search: bool,
+    pub mid_pair_search: bool,
+    /// JS `y` (sticky): `test()` from `lastIndex` 0 only tries index 0.
+    pub sticky: bool,
 }
 
 /// The set of haystacks a verdict is about.
@@ -37,9 +39,10 @@ pub struct Quirks {
 pub enum Domain {
     /// All strings of Unicode scalar values.
     Scalars,
-    /// Strings of Basic Multilingual Plane characters only. Used for JavaScript without the `u`
-    /// or `v` flag, which matches UTF-16 code units: an astral character there is two units.
-    Bmp,
+    /// JavaScript without `u`/`v`: the pattern matches UTF-16 code units. Lowering yields a
+    /// language over code units (surrogates as pseudo code points); `utf16::scalar_dfa` lifts it
+    /// to haystacks of scalar values exactly (ADR-0007).
+    Utf16,
 }
 
 /// One IR node with the span of pattern text it came from.
@@ -65,8 +68,9 @@ pub enum NodeKind {
     Assert(Assertion),
     /// Look-ahead / look-behind, possibly negated. Not regular in general; analysed in P4.
     Look(Look),
-    /// Backreference to a capture group (1-based). Not regular; bounded analysis in P4.
-    Backref(u32),
+    /// Backreference to a capture group (1-based), with the engine's comparison rule. Not
+    /// regular: analysed by the bounded interpreter (ADR-0011).
+    Backref(u32, BackrefCase),
     /// `(?(group)yes|no)`: match `yes` if the group participated, else `no` (Python, PCRE).
     Conditional(Conditional),
 }
@@ -217,6 +221,24 @@ impl WordSet {
     }
 }
 
+/// How a backreference compares characters (the flags at the reference).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum BackrefCase {
+    Exact,
+    /// Python `(?i)`: the measured case-insensitive relation (ASCII-only under `(?a)`).
+    Python {
+        ascii: bool,
+    },
+    /// JS `i`: Canonicalize (toUpperCase-based without `u`, simple case folding with `u`).
+    Js {
+        unicode: bool,
+    },
+    /// Java `(?i)`: ASCII, or `toUpperCase`/`toLowerCase` comparison with `(?u)`.
+    Java {
+        unicode: bool,
+    },
+}
+
 /// Which characters end a line for multi-line `^` / `$`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum LineTerms {
@@ -262,7 +284,7 @@ impl Node {
             | NodeKind::Literal(_)
             | NodeKind::Class(_)
             | NodeKind::Assert(_)
-            | NodeKind::Backref(_) => {}
+            | NodeKind::Backref(..) => {}
         }
     }
 
@@ -276,7 +298,7 @@ impl Node {
             NodeKind::Group(g) => g.sub.width(),
             NodeKind::Look(_) => (0, Some(0)),
             // Unknown statically: the referenced group can match anything.
-            NodeKind::Backref(_) => (0, None),
+            NodeKind::Backref(..) => (0, None),
             NodeKind::Conditional(c) => {
                 let y = c.yes.width();
                 let n = c.no.as_ref().map_or((0, Some(0)), |n| n.width());
@@ -358,7 +380,7 @@ impl Node {
                     if l.negated { " negated" } else { "" }
                 );
             }
-            NodeKind::Backref(i) => {
+            NodeKind::Backref(i, _) => {
                 let _ = write!(out, "backref #{i}");
             }
             NodeKind::Conditional(c) => {
@@ -425,7 +447,7 @@ impl fmt::Display for Node {
                 if l.behind { "behind" } else { "ahead" },
                 l.sub
             ),
-            NodeKind::Backref(i) => write!(f, "\\{i}"),
+            NodeKind::Backref(i, _) => write!(f, "\\{i}"),
             NodeKind::Conditional(c) => match &c.no {
                 Some(n) => write!(f, "(if{} {} {})", c.group, c.yes, n),
                 None => write!(f, "(if{} {})", c.group, c.yes),
