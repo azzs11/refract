@@ -1,0 +1,16 @@
+target/
+.DS_Store
+node_modules/
+dist/
+__pycache__/
+.venv/
+*.pyc
+# local-only working notes (never committed)
+CLAUDE.md
+COMMITS.md
+.claude/
+fuzz/artifacts/
+fuzz/corpus/
+fuzz/coverage/
+*.profraw
+.commit-plan/
