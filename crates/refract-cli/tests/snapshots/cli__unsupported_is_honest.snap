@@ -2,6 +2,7 @@
 source: crates/refract-cli/tests/cli.rs
 expression: out
 ---
-error: unsupported: backreferences are not regular; bounded analysis arrives in phase P4
-  (a)\1
-     ^^
+error: java pattern:
+unsupported: \X (grapheme clusters) is not analysed yet
+  a\X
+    ^

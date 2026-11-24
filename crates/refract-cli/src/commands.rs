@@ -93,27 +93,40 @@ pub fn equiv(
     as_json: bool,
 ) -> Result<ExitCode> {
     let budget = budget(max_states);
-    let lowered = |s: &Spec| -> Result<refract_core::Re> {
-        let re = parse_pattern(s.flavor, &s.pattern)
-            .map_err(|e| anyhow!("{} pattern:\n{}", s.flavor, e.render(&s.pattern)))?;
-        lower(&re, op, &budget).map_err(|e| anyhow!("{}", e.render(&s.pattern)))
+    let parsed = |s: &Spec| -> Result<refract_core::Regex> {
+        parse_pattern(s.flavor, &s.pattern)
+            .map_err(|e| anyhow!("{} pattern:\n{}", s.flavor, e.render(&s.pattern)))
     };
-    let (x, y) = (lowered(a)?, lowered(b)?);
-    let parse_dom = |s: &Spec| parse_pattern(s.flavor, &s.pattern).map(|r| r.domain).ok();
-    let d = match (parse_dom(a), parse_dom(b)) {
-        (Some(refract_core::ir::Domain::Bmp), _) | (_, Some(refract_core::ir::Domain::Bmp)) => {
-            refract_core::ir::Domain::Bmp
-        }
-        _ => refract_core::ir::Domain::Scalars,
-    };
-    let (x, y) = (
-        refract_core::regular::restrict(x, d),
-        refract_core::regular::restrict(y, d),
-    );
-    let report = equivalent(&x, &y, engine, &budget).map_err(|e| anyhow!("{}", e.message))?;
+    let (ra, rb) = (parsed(a)?, parsed(b)?);
+    let report = match engine {
+        // Exact or, outside the regular fragment, bounded (ADR-0011).
+        Engine::Derivative => refract_core::equiv::compare(&ra, &rb, op, &budget),
+        // The reference engine: exact only.
+        Engine::Thompson => (|| {
+            if ra.domain != refract_core::ir::Domain::Scalars
+                || rb.domain != refract_core::ir::Domain::Scalars
+            {
+                return Err(refract_core::Error::unsupported(
+                    refract_core::Span::default(),
+                    "the Thompson reference engine works on scalar values; JS without /u needs the derivative engine",
+                ));
+            }
+            let x = lower(&ra, op, &budget)?;
+            let y = lower(&rb, op, &budget)?;
+            equivalent(&x, &y, engine, &budget)
+        })(),
+    }
+    .map_err(|e| {
+        let which = if e.message.contains("a ") {
+            &a.pattern
+        } else {
+            &b.pattern
+        };
+        anyhow!("{}", e.render(which))
+    })?;
 
     let (code, replayed) = match &report.verdict {
-        Verdict::Equivalent => (ExitCode::SUCCESS, None),
+        Verdict::Equivalent | Verdict::NoDifferenceUpTo { .. } => (ExitCode::SUCCESS, None),
         Verdict::Different(w) => {
             let left = w.accepted_by == Side::Left;
             let mut oracles = Oracles::default();
@@ -128,6 +141,9 @@ pub fn equiv(
 
     if as_json {
         let (status, notes) = match &replayed {
+            None if matches!(report.verdict, Verdict::NoDifferenceUpTo { .. }) => {
+                ("bounded", vec![])
+            }
             None => ("proven", vec![]),
             Some(Replay::Confirmed(n)) => ("confirmed", n.clone()),
             Some(Replay::Predicted(n)) => ("predicted", n.clone()),
@@ -140,9 +156,16 @@ pub fn equiv(
                 "length": w.text.chars().count(),
                 "accepted_by": if w.accepted_by == Side::Left { "a" } else { "b" },
             }),
-            Verdict::Equivalent => serde_json::Value::Null,
+            Verdict::Equivalent | Verdict::NoDifferenceUpTo { .. } => serde_json::Value::Null,
+        };
+        let bound = match report.verdict {
+            Verdict::NoDifferenceUpTo { max_len, alphabet } => {
+                json!({"max_len": max_len, "alphabet": alphabet})
+            }
+            _ => serde_json::Value::Null,
         };
         let out = json!({
+            "bounded": bound,
             "operation": op.name(),
             "a": { "flavor": a.flavor.name(), "pattern": a.pattern },
             "b": { "flavor": b.flavor.name(), "pattern": b.pattern },
@@ -167,6 +190,17 @@ pub fn equiv(
                 "verdict    EQUIVALENT (proven: no distinguishing string; explored {} product \
                  states over {} minterms)",
                 report.product_states, report.minterms
+            );
+        }
+        Verdict::NoDifferenceUpTo { max_len, alphabet } => {
+            println!(
+                "verdict    NO DIFFERENCE UP TO LENGTH {max_len} (bounded, not proven: the patterns \
+                 are not regular)"
+            );
+            println!(
+                "           checked all {} haystacks of length <= {max_len} over {alphabet} \
+                 representative characters",
+                report.product_states
             );
         }
         Verdict::Different(w) => {
@@ -212,9 +246,20 @@ pub fn dfa(
 ) -> Result<ExitCode> {
     let budget = budget(max_states);
     let re = parse_pattern(flavor, pattern).map_err(|e| anyhow!("{}", e.render(pattern)))?;
-    let term = lower(&re, op, &budget).map_err(|e| anyhow!("{}", e.render(pattern)))?;
-    let alphabet = alphabet_for(&[&term]);
-    let m = minimal_dfa(&term, &alphabet, engine, &budget).map_err(|e| anyhow!("{}", e.message))?;
+    let m = match (engine, re.domain) {
+        // Any domain (JS without /u is lifted from code units, ADR-0007).
+        (Engine::Derivative, _) | (_, refract_core::ir::Domain::Utf16) => {
+            refract_core::automata::regex_dfa(&re, op, &budget)
+                .map(|d| refract_core::minimize::hopcroft(&d))
+                .map_err(|e| anyhow!("{}", e.render(pattern)))?
+        }
+        (Engine::Thompson, _) => {
+            let term = lower(&re, op, &budget).map_err(|e| anyhow!("{}", e.render(pattern)))?;
+            let alphabet = alphabet_for(&[&term]);
+            minimal_dfa(&term, &alphabet, engine, &budget).map_err(|e| anyhow!("{}", e.message))?
+        }
+    };
+    let alphabet = m.alphabet.clone();
     if dot {
         print!("{}", m.to_dot());
         return Ok(ExitCode::SUCCESS);
@@ -301,7 +346,7 @@ pub fn flavors() -> Result<ExitCode> {
 /// One row of a cross-engine report.
 struct Row {
     flavor: Flavor,
-    verdict: &'static str,
+    verdict: String,
     witness: Option<String>,
     /// (source matches, target matches) on the witness, as predicted.
     predicted: Option<(bool, bool)>,
@@ -320,7 +365,6 @@ pub fn refract(
     let budget = budget(None);
     let src_ir = parse_pattern(from, pattern)
         .map_err(|e| anyhow!("{from} pattern:\n{}", e.render(pattern)))?;
-    let src = lower(&src_ir, op, &budget).map_err(|e| anyhow!("{}", e.render(pattern)))?;
     let mut oracles = Oracles::default();
     let word = |m: bool| if m { "match" } else { "no match" };
     let mut rows = Vec::new();
@@ -343,7 +387,7 @@ pub fn refract(
                 worst = worst.max(1);
                 Row {
                     flavor: t,
-                    verdict: "REJECTS",
+                    verdict: "REJECTS".into(),
                     witness: None,
                     predicted: None,
                     status,
@@ -352,38 +396,37 @@ pub fn refract(
             }
             Err(e) => Row {
                 flavor: t,
-                verdict: "NOT ANALYSED",
+                verdict: "NOT ANALYSED".into(),
                 witness: None,
                 predicted: None,
                 status: "-".into(),
                 note: e.message,
             },
-            Ok(ir) => match lower(&ir, op, &budget).and_then(|re| {
-                // Compare over the common domain so the witness is valid for both engines.
-                let d = refract_core::regular::common_domain(&src_ir, &ir);
-                let x = refract_core::regular::restrict(src.clone(), d);
-                let y = refract_core::regular::restrict(re, d);
-                equivalent(&x, &y, Engine::Derivative, &budget)
-            }) {
+            Ok(ir) => match refract_core::equiv::compare(&src_ir, &ir, op, &budget) {
                 Err(e) => Row {
                     flavor: t,
-                    verdict: "NOT ANALYSED",
+                    verdict: "NOT ANALYSED".into(),
                     witness: None,
                     predicted: None,
                     status: "-".into(),
                     note: e.message,
                 },
                 Ok(rep) => match rep.verdict {
+                    Verdict::NoDifferenceUpTo { max_len, alphabet } => Row {
+                        flavor: t,
+                        verdict: format!("SAME ≤{max_len}"),
+                        witness: None,
+                        predicted: None,
+                        status: "bounded".into(),
+                        note: format!(
+                            "no difference on any haystack of length <= {max_len} over {alphabet} characters (not regular, so not proven)"
+                        ),
+                    },
                     Verdict::Equivalent => {
-                        let mut note = format!("proven over {} product states", rep.product_states);
-                        if refract_core::regular::common_domain(&src_ir, &ir)
-                            == refract_core::ir::Domain::Bmp
-                        {
-                            note.push_str("; JS without /u: BMP haystacks only");
-                        }
+                        let note = format!("proven over {} product states", rep.product_states);
                         Row {
                             flavor: t,
-                            verdict: "SAME",
+                            verdict: "SAME".into(),
                             witness: None,
                             predicted: None,
                             status: "proven".into(),
@@ -411,7 +454,7 @@ pub fn refract(
                         };
                         Row {
                             flavor: t,
-                            verdict: "DIFFERS",
+                            verdict: "DIFFERS".into(),
                             witness: Some(w.text),
                             predicted: Some((src_m, !src_m)),
                             status,

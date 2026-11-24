@@ -11,6 +11,7 @@ expression: out
     "flavor": "rust",
     "pattern": "."
   },
+  "bounded": null,
   "engine": "Derivative",
   "equivalent": false,
   "minterms": 2,

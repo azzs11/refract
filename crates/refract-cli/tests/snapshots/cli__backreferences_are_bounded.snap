@@ -1,0 +1,9 @@
+---
+source: crates/refract-cli/tests/cli.rs
+expression: out
+---
+operation  full-match
+a          python (a+)\1
+b          python (aa)+
+verdict    NO DIFFERENCE UP TO LENGTH 10 (bounded, not proven: the patterns are not regular)
+           checked all 88573 haystacks of length <= 10 over 3 representative characters

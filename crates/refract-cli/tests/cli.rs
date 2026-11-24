@@ -80,8 +80,18 @@ fn word_boundaries_are_analysed() {
 
 #[test]
 fn unsupported_is_honest() {
-    let (code, out) = refract(&["equiv", "--flavor", "python", "--a", "(a)\\1", "--b", "aa"]);
+    // Java \X (grapheme clusters) is valid but not analysed: refused with its location.
+    let (code, out) = refract(&["equiv", "--flavor", "java", "--a", "a\\X", "--b", "a"]);
     assert_eq!(code, 2);
+    insta::assert_snapshot!(out);
+}
+
+#[test]
+fn backreferences_are_bounded() {
+    let (code, out) = refract(&[
+        "equiv", "--flavor", "python", "--a", "(a+)\\1", "--b", "(aa)+",
+    ]);
+    assert_eq!(code, 0);
     insta::assert_snapshot!(out);
 }
 
