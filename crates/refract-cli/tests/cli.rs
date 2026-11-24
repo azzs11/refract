@@ -71,10 +71,31 @@ fn equiv_both_engines_agree() {
 }
 
 #[test]
+fn word_boundaries_are_analysed() {
+    // \b anywhere is exact since P3 (look-around via continuations and look-behind context).
+    let (code, out) = refract(&["equiv", "--op", "search", "--a", "\\bfoo", "--b", "foo"]);
+    assert_eq!(code, 1);
+    insta::assert_snapshot!(out);
+}
+
+#[test]
 fn unsupported_is_honest() {
-    let (code, out) = refract(&["equiv", "--a", "\\bfoo", "--b", "foo"]);
+    let (code, out) = refract(&["equiv", "--flavor", "python", "--a", "(a)\\1", "--b", "aa"]);
     assert_eq!(code, 2);
     insta::assert_snapshot!(out);
+}
+
+/// Cross-engine report, Python source vs Rust (in-process), when python3 is installed.
+#[test]
+fn refract_python_vs_rust() {
+    if std::process::Command::new("python3").arg("-V").output().is_err() {
+        eprintln!("skipping: python3 not available");
+        return;
+    }
+    let (code, out) = refract(&["refract", "--from", "python", "--to", "rust", r"^\w+@\w+\.com$"]);
+    assert_eq!(code, 1, "{out}");
+    assert!(out.contains("DIFFERS") && out.contains("confirmed"), "{out}");
+    assert!(out.contains("\"a@².com\""), "{out}");
 }
 
 #[test]

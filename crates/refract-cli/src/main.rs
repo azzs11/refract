@@ -29,7 +29,7 @@ struct Cli {
 enum Command {
     /// Parse a pattern and print its intermediate representation.
     Parse {
-        /// Source flavour (rust; others arrive in P3).
+        /// Source flavour: rust, python, js, go, java.
         #[arg(long, short = 'f', default_value = "rust")]
         flavor: Flavor,
         /// Print the compact S-expression instead of the tree.
@@ -63,6 +63,21 @@ enum Command {
         max_states: Option<usize>,
         #[arg(long)]
         json: bool,
+    },
+    /// One pattern, every engine: per engine SAME (proven), DIFFERS (shortest witness,
+    /// replayed on both real engines) or REJECTS (confirmed on the engine).
+    Refract {
+        /// The flavour the pattern was written for.
+        #[arg(long, short = 'f', default_value = "python")]
+        from: Flavor,
+        /// Engines to compare against (comma-separated).
+        #[arg(long, value_delimiter = ',', default_value = "js,python,go,java,rust")]
+        to: Vec<Flavor>,
+        #[arg(long, default_value = "full")]
+        op: Op,
+        #[arg(long)]
+        json: bool,
+        pattern: String,
     },
     /// Build the minimal DFA of a pattern.
     Dfa {
@@ -118,6 +133,13 @@ fn run(cli: Cli) -> Result<ExitCode> {
             max_states,
             json,
         ),
+        Command::Refract {
+            from,
+            to,
+            op,
+            json,
+            pattern,
+        } => commands::refract(from, &pattern, &to, op, json),
         Command::Dfa {
             flavor,
             op,

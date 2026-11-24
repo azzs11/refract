@@ -2,6 +2,6 @@
 source: crates/refract-cli/tests/cli.rs
 expression: out
 ---
-error: unsupported: word-boundary assertion here depends on the surrounding text; assertions inside the pattern are analysed from phase P4 (only leading/trailing anchors are handled now)
-  \bfoo
-  ^^
+error: unsupported: backreferences are not regular; bounded analysis arrives in phase P4
+  (a)\1
+     ^^
