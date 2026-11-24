@@ -6,7 +6,7 @@
 //! million) and makes DFAs built by different engines directly comparable: both must use the
 //! same [`Alphabet`] (doc review item 7).
 
-use crate::charset::{CharSet, MAX_CHAR};
+use crate::charset::{CharSet, MAX_PSEUDO};
 use crate::unicode;
 use std::collections::HashMap;
 
@@ -76,7 +76,7 @@ pub enum Readability {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Alphabet {
     classes: Vec<CharSet>,
-    reps: Vec<(Readability, char)>,
+    reps: Vec<(Readability, u32)>,
     /// Class indices sorted from most to least readable representative.
     order: Vec<usize>,
     /// Sorted, disjoint `(lo, hi, class)` intervals covering every scalar value.
@@ -91,11 +91,22 @@ impl Alphabet {
         uniq.sort();
         uniq.dedup();
 
+        // Pseudo code units (JS without `u`) join the universe only when some set uses them;
+        // otherwise every string over the alphabet is a string of scalar values.
+        let top = if uniq.iter().any(|s| {
+            s.ranges()
+                .last()
+                .is_some_and(|r| r.1 > crate::charset::MAX_CHAR)
+        }) {
+            MAX_PSEUDO
+        } else {
+            crate::charset::MAX_CHAR
+        };
         let mut cuts: Vec<u32> = vec![0, 0xD800, 0xE000];
         for s in &uniq {
             for &(lo, hi) in s.ranges() {
                 cuts.push(lo);
-                if hi < MAX_CHAR {
+                if hi < top {
                     cuts.push(hi + 1);
                 }
             }
@@ -107,14 +118,14 @@ impl Alphabet {
         let mut members: Vec<Vec<(u32, u32)>> = Vec::new();
         let mut intervals = Vec::new();
         for (k, &lo) in cuts.iter().enumerate() {
-            let hi = cuts.get(k + 1).map_or(MAX_CHAR, |&next| next - 1);
+            let hi = cuts.get(k + 1).map_or(top, |&next| next - 1);
+            if lo > top {
+                continue;
+            }
             if (0xD800..=0xDFFF).contains(&lo) {
                 continue; // surrogates are not scalar values
             }
-            let Some(c) = char::from_u32(lo) else {
-                continue;
-            };
-            let sig: Vec<bool> = uniq.iter().map(|s| s.contains(c)).collect();
+            let sig: Vec<bool> = uniq.iter().map(|s| s.contains_u32(lo)).collect();
             let next_id = members.len();
             let id = *by_signature.entry(sig).or_insert(next_id);
             if id == next_id {
@@ -124,7 +135,17 @@ impl Alphabet {
             intervals.push((lo, hi, id));
         }
         let classes: Vec<CharSet> = members.into_iter().map(CharSet::from_ranges).collect();
-        let reps: Vec<(Readability, char)> = classes.iter().map(best_char).collect();
+        let reps: Vec<(Readability, u32)> = classes
+            .iter()
+            .map(|c| match c.min_char() {
+                Some(_) => {
+                    let (r, ch) = best_char(c);
+                    (r, ch as u32)
+                }
+                // Only pseudo code units (ADR-0007): no scalar to spell it with.
+                None => (Readability::Other, c.ranges().first().map_or(0, |r| r.0)),
+            })
+            .collect();
         let mut order: Vec<usize> = (0..classes.len()).collect();
         order.sort_by_key(|&i| reps[i]);
         Alphabet {
@@ -150,7 +171,11 @@ impl Alphabet {
 
     /// The minterm containing `c`.
     pub fn class_of(&self, c: char) -> usize {
-        let c = c as u32;
+        self.class_of_u32(c as u32)
+    }
+
+    /// The minterm of any code point, including pseudo code units.
+    pub fn class_of_u32(&self, c: u32) -> usize {
         let i = self.intervals.partition_point(|&(_, hi, _)| hi < c);
         self.intervals.get(i).map_or(0, |&(_, _, id)| id)
     }
@@ -160,7 +185,7 @@ impl Alphabet {
     pub fn mask(&self, set: &CharSet) -> BitSet {
         let mut m = BitSet::new(self.len());
         for (i, (_, c)) in self.reps.iter().enumerate() {
-            if set.contains(*c) {
+            if set.contains_u32(*c) {
                 m.insert(i);
             }
         }
@@ -169,6 +194,11 @@ impl Alphabet {
 
     /// The most readable member of a minterm, used to spell witnesses.
     pub fn representative(&self, i: usize) -> char {
+        char::from_u32(self.reps[i].1).unwrap_or('\u{FFFD}')
+    }
+
+    /// The representative as a code point (may be a pseudo code unit).
+    pub fn representative_u32(&self, i: usize) -> u32 {
         self.reps[i].1
     }
 
@@ -255,7 +285,9 @@ mod tests {
                 total = total.union(alpha.class(i));
                 prop_assert!(alpha.class(i).contains(alpha.representative(i)));
             }
-            prop_assert!(total.is_full());
+            // Every scalar value (and the internal pseudo code units) is covered.
+            prop_assert!(total.intersect(&CharSet::full()).is_full());
+            prop_assert!(!total.contains_u32(crate::charset::PSEUDO_BASE), "no pseudo points unless used");
             // Every input set is exactly the union of its mask.
             for s in &sets {
                 let m = alpha.mask(s);

@@ -1,15 +1,19 @@
-# ADR-0007: Analysis domains (BMP for JavaScript without `u`)
+# ADR-0007: Exact UTF-16 semantics for JavaScript without `u`
+
+**Status:** accepted (revised in P4: replaces the earlier "BMP haystacks only" restriction).
 
 **Context.** JavaScript without `u`/`v` matches UTF-16 code units: an astral character is two
-units, `.` matches one half, and `[😀-😂]` is a "range out of order" error. Refract's alphabet is
-Unicode scalar values (ADR-0003), which cannot represent a lone surrogate.
+units, `.` matches one half, `[😀-😂]` is "range out of order". Refract's haystacks are strings of
+Unicode scalar values, and `CharSet` excluded surrogates.
 
-**Decision.** Every `Regex` carries a `Domain`: `Scalars`, or `Bmp` for JS without `u`. Lowering
-intersects a `Bmp` language with `[\u{0}-\u{FFFF}]*`. When two patterns are compared, both are
-restricted to their *common* domain, so a witness is a valid haystack for both engines. The parser
-still models code units exactly (astral source chars become two never-matching units), so syntax
-and acceptance are exact. Reports say "BMP haystacks only" whenever the domain is restricted.
+**Decision.** Such a pattern carries `Domain::Utf16`. Surrogate code units are internal *pseudo
+code points* (`0x110000 + (u - 0xD800)`), which `CharSet`, the alphabet (only when some set uses
+them) and the interpreter understand. Lowering yields a language over code units (Σ = all code
+units). `utf16::UnitDfa::lift` turns its DFA into one over scalar values by the inverse UTF-16
+homomorphism — `δ'(q, c) = δ(δ(q, hi(c)), lo(c))` for astral `c` — on a scalar alphabet that
+partitions astral characters by the unit classes of their halves. `automata::shared_dfas` puts
+any mix of domains on one alphabet for comparison.
 
-**Consequences.** Differences that need an astral character with non-`u` JS (e.g. `/^.$/` on "😀")
-are outside the analysed domain and are stated as such, never silently wrong. Exact UTF-16
-modelling (inverse homomorphism from scalars to code units) is a recorded follow-up.
+**Consequences.** `/^.$/` (no `u`) versus Python on "𐀀" is found and confirmed. Every JS flag set
+is checked against V8 on astral haystacks. Engines that also search mid-pair (V8 with `u`, Java
+`Start`) are modelled by `Quirks::mid_pair_search` (docs/findings.md).

@@ -55,3 +55,43 @@ pub fn minimal_dfa(
 ) -> Result<Dfa> {
     Ok(minimize::hopcroft(&dfa(re, alphabet, engine, budget)?))
 }
+
+/// DFAs for several lowered regexes over one shared alphabet of scalar values. Code-unit
+/// languages (JS without `u`, `Domain::Utf16`) are lifted exactly (`utf16`).
+pub fn shared_dfas(
+    langs: &[(&Re, crate::ir::Domain)],
+    budget: &Budget,
+) -> Result<(Arc<Alphabet>, Vec<Dfa>)> {
+    use crate::ir::Domain;
+    let mut sets = Vec::new();
+    let mut units = Vec::new();
+    for (re, d) in langs {
+        match d {
+            Domain::Scalars => {
+                re.collect_sets(&mut sets);
+                units.push(None);
+            }
+            Domain::Utf16 => {
+                let u = crate::utf16::UnitDfa::new(re, budget)?;
+                sets.extend(u.cells());
+                units.push(Some(u));
+            }
+        }
+    }
+    let alphabet = Arc::new(Alphabet::new(&sets));
+    let mut out = Vec::new();
+    for ((re, _), u) in langs.iter().zip(&units) {
+        out.push(match u {
+            Some(u) => u.lift(&alphabet),
+            None => crate::deriv::to_dfa(re, &alphabet, budget)?,
+        });
+    }
+    Ok((alphabet, out))
+}
+
+/// The DFA (over scalar values) of a parsed regex under an operation, in any domain.
+pub fn regex_dfa(re: &crate::ir::Regex, op: crate::regular::Op, budget: &Budget) -> Result<Dfa> {
+    let lang = crate::regular::lower(re, op, budget)?;
+    let (_, mut d) = shared_dfas(&[(&lang, re.domain)], budget)?;
+    Ok(d.remove(0))
+}

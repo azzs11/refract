@@ -11,6 +11,11 @@ use std::fmt;
 
 /// Largest Unicode scalar value.
 pub const MAX_CHAR: u32 = 0x10_FFFF;
+/// Internal pseudo code points `0x110000 + (u - 0xD800)` stand for lone UTF-16 surrogate code
+/// units, so JavaScript without `u` can be modelled on code units (ADR-0007). They never occur
+/// in a haystack of scalar values.
+pub const PSEUDO_BASE: u32 = 0x11_0000;
+pub const MAX_PSEUDO: u32 = PSEUDO_BASE + 0x7FF;
 const SURROGATE_LO: u32 = 0xD800;
 const SURROGATE_HI: u32 = 0xDFFF;
 
@@ -51,7 +56,7 @@ impl CharSet {
     pub fn from_ranges<I: IntoIterator<Item = (u32, u32)>>(iter: I) -> Self {
         let mut raw: Vec<(u32, u32)> = Vec::new();
         for (lo, hi) in iter {
-            let hi = hi.min(MAX_CHAR);
+            let hi = hi.min(MAX_PSEUDO);
             if lo > hi {
                 continue;
             }
@@ -153,11 +158,12 @@ impl CharSet {
         CharSet { ranges: out }
     }
 
-    /// Complement relative to all scalar values.
+    /// Complement relative to all scalar values (pseudo code units are never included).
     pub fn complement(&self) -> CharSet {
-        let mut out = Vec::with_capacity(self.ranges.len() + 2);
+        let scalars = self.intersect(&CharSet::full());
+        let mut out = Vec::with_capacity(scalars.ranges.len() + 2);
         let mut next = 0u32;
-        for &(lo, hi) in &self.ranges {
+        for &(lo, hi) in &scalars.ranges {
             if lo > next {
                 out.push((next, lo - 1));
             }
@@ -170,9 +176,58 @@ impl CharSet {
         CharSet::from_ranges(out)
     }
 
+    /// Membership of any code point, including pseudo code units.
+    pub fn contains_u32(&self, c: u32) -> bool {
+        self.ranges
+            .binary_search_by(|&(lo, hi)| {
+                if hi < c {
+                    std::cmp::Ordering::Less
+                } else if lo > c {
+                    std::cmp::Ordering::Greater
+                } else {
+                    std::cmp::Ordering::Equal
+                }
+            })
+            .is_ok()
+    }
+
+    /// Every UTF-16 code unit: BMP scalars plus the pseudo points for surrogates.
+    pub fn units() -> CharSet {
+        CharSet::from_ranges([(0, 0xD7FF), (0xE000, 0xFFFF), (PSEUDO_BASE, MAX_PSEUDO)])
+    }
+
+    /// Complement relative to all UTF-16 code units.
+    pub fn units_complement(&self) -> CharSet {
+        CharSet::units().difference_raw(self)
+    }
+
+    /// `self \ other` without re-normalising to scalars (keeps pseudo points).
+    pub fn difference_raw(&self, other: &CharSet) -> CharSet {
+        let mut out = Vec::new();
+        for &(lo, hi) in &self.ranges {
+            let mut cur = lo;
+            for &(olo, ohi) in &other.ranges {
+                if ohi < cur || olo > hi {
+                    continue;
+                }
+                if olo > cur {
+                    out.push((cur, olo - 1));
+                }
+                cur = ohi.saturating_add(1);
+                if cur > hi {
+                    break;
+                }
+            }
+            if cur <= hi {
+                out.push((cur, hi));
+            }
+        }
+        CharSet::from_ranges(out)
+    }
+
     /// Set difference `self \ other`.
     pub fn difference(&self, other: &CharSet) -> CharSet {
-        self.intersect(&other.complement())
+        self.difference_raw(other)
     }
 
     /// Symmetric difference.
@@ -199,6 +254,9 @@ impl FromIterator<char> for CharSet {
 
 /// Formats a code point for humans: printable ASCII as itself, everything else as `\u{..}`.
 pub fn fmt_code_point(c: u32) -> String {
+    if (PSEUDO_BASE..=MAX_PSEUDO).contains(&c) {
+        return format!("\\u{{{:X}}}(unit)", c - PSEUDO_BASE + 0xD800);
+    }
     match char::from_u32(c) {
         Some(ch) if ch.is_ascii_graphic() && !matches!(ch, '\\' | '-' | '[' | ']' | '^') => {
             ch.to_string()
