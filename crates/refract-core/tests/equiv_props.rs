@@ -68,6 +68,11 @@ proptest! {
                 let found = brute_force_distinguishes(&a, &b, 5);
                 prop_assert!(found.is_none(), "claimed equivalent but {:?} distinguishes {} and {}", found, a, b);
             }
+            // `equivalent` on regular terms is always exact; the bounded verdict comes only from
+            // `compare` on non-regular patterns.
+            Verdict::NoDifferenceUpTo { .. } => {
+                return Err(TestCaseError::fail("exact comparison returned a bounded verdict"));
+            }
         }
     }
 

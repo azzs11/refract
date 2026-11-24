@@ -40,6 +40,12 @@ pub enum Verdict {
     /// Proven: no string distinguishes the two (the whole product was explored).
     Equivalent,
     Different(Witness),
+    /// Bounded (ADR-0011): no string up to `max_len` over the representative alphabet
+    /// distinguishes them. Never shown as "proven".
+    NoDifferenceUpTo {
+        max_len: usize,
+        alphabet: usize,
+    },
 }
 
 /// The result of one comparison, with the facts a report needs.
@@ -69,10 +75,150 @@ pub fn equivalent(a: &Re, b: &Re, engine: Engine, budget: &Budget) -> Result<Rep
 /// Decides whether two parsed regexes behave the same under `op` (they may be in different
 /// flavours: each was already lowered with its own flavour's semantics).
 pub fn equivalent_regex(a: &Regex, b: &Regex, op: Op, budget: &Budget) -> Result<Report> {
-    let d = crate::regular::common_domain(a, b);
-    let x = crate::regular::restrict(lower(a, op, budget)?, d);
-    let y = crate::regular::restrict(lower(b, op, budget)?, d);
-    equivalent(&x, &y, Engine::Derivative, budget)
+    let x = lower(a, op, budget)?;
+    let y = lower(b, op, budget)?;
+    use crate::ir::Domain;
+    if a.domain == Domain::Scalars && b.domain == Domain::Scalars {
+        return equivalent(&x, &y, Engine::Derivative, budget);
+    }
+    // Code-unit semantics on at least one side: lift both to one scalar alphabet.
+    let (_, dfas) = crate::automata::shared_dfas(&[(&x, a.domain), (&y, b.domain)], budget)?;
+    dfa_product(&dfas[0], &dfas[1], budget)
+}
+
+/// Compares two parsed regexes: exactly when both lower to automata, otherwise by the bounded
+/// check (ADR-0011). The verdict says which it was.
+pub fn compare(a: &Regex, b: &Regex, op: Op, budget: &Budget) -> Result<Report> {
+    match equivalent_regex(a, b, op, budget) {
+        Err(e) if e.kind == crate::error::ErrorKind::Unsupported => bounded(a, b, op, budget),
+        other => other,
+    }
+}
+
+/// Characters worth trying: one representative of every minterm of the sets the two patterns
+/// mention, plus a second, distinct character of the same minterm (preferring a case partner)
+/// so back-references can tell "same character" from "different character".
+fn bounded_alphabet(a: &Regex, b: &Regex) -> Vec<char> {
+    use crate::ir::{Assertion, NodeKind, WordSet};
+    let mut sets: Vec<crate::CharSet> = Vec::new();
+    for re in [a, b] {
+        re.root.walk(&mut |n| match &n.kind {
+            NodeKind::Literal(c) => sets.push(crate::CharSet::single(*c)),
+            NodeKind::Class(s) => sets.push(s.clone()),
+            NodeKind::Assert(
+                Assertion::WordBoundary { word }
+                | Assertion::NotWordBoundary { word }
+                | Assertion::WordStart { word }
+                | Assertion::WordEnd { word }
+                | Assertion::WordStartHalf { word }
+                | Assertion::WordEndHalf { word },
+            ) => {
+                sets.push(word.chars());
+                if *word == WordSet::Java {
+                    let (mn, ld) = crate::tables::java_marks();
+                    sets.extend([mn.clone(), ld.clone()]);
+                }
+            }
+            NodeKind::Assert(_) => {
+                sets.push(
+                    ['\n', '\r', '\u{85}', '\u{2028}', '\u{2029}']
+                        .into_iter()
+                        .collect(),
+                );
+            }
+            _ => {}
+        });
+    }
+    let alpha = Alphabet::new(&sets);
+    // The interpreter works on scalar values; for JS keep the bounded check in the BMP, where
+    // code units and code points coincide (the exact automata handle astral haystacks).
+    let js = a.flavor == crate::Flavor::JavaScript || b.flavor == crate::Flavor::JavaScript;
+    let ok = |c: char| !js || (c as u32) <= 0xFFFF;
+    let mut first = Vec::new();
+    let mut second = Vec::new();
+    for &i in alpha.readable_order() {
+        let class = alpha.class(i);
+        let rep = alpha.representative(i);
+        if !ok(rep) {
+            continue;
+        }
+        first.push(rep);
+        let partner = rep
+            .to_uppercase()
+            .chain(rep.to_lowercase())
+            .find(|&p| p != rep && class.contains(p) && ok(p));
+        let other = partner.or_else(|| class.chars().take(64).find(|&p| p != rep && ok(p)));
+        if let Some(o) = other {
+            second.push(o);
+        }
+    }
+    first.extend(second);
+    first
+}
+
+/// Bounded comparison: all haystacks up to a length that keeps the search under budget,
+/// shortest and most readable first.
+fn bounded(a: &Regex, b: &Regex, op: Op, budget: &Budget) -> Result<Report> {
+    const MAX_STRINGS: u64 = 150_000;
+    const STEP_LIMIT: u64 = 200_000;
+    let alphabet = bounded_alphabet(a, b);
+    let k = alphabet.len().max(1) as u64;
+    let mut max_len = 0usize;
+    let (mut total, mut level) = (1u64, 1u64);
+    while max_len < 12 {
+        level = level.saturating_mul(k);
+        if total.saturating_add(level) > MAX_STRINGS {
+            break;
+        }
+        total += level;
+        max_len += 1;
+    }
+    // Exact automata where a side lowers; the interpreter otherwise.
+    type Membership = Box<dyn Fn(&str) -> Result<bool>>;
+    let side = |re: &Regex| -> Membership {
+        if let Ok(d) = crate::automata::regex_dfa(re, op, budget) {
+            return Box::new(move |s: &str| Ok(d.accepts(s)));
+        }
+        let re = re.clone();
+        Box::new(move |s: &str| crate::interp::is_match(&re, op, s, STEP_LIMIT))
+    };
+    let (fa, fb) = (side(a), side(b));
+    let mut checked = 0usize;
+    let mut current: Vec<String> = vec![String::new()];
+    for len in 0..=max_len {
+        for s in &current {
+            budget.check_time()?;
+            checked += 1;
+            let (x, y) = (fa(s)?, fb(s)?);
+            if x != y {
+                return Ok(Report {
+                    verdict: Verdict::Different(Witness {
+                        text: s.clone(),
+                        accepted_by: if x { Side::Left } else { Side::Right },
+                    }),
+                    product_states: checked,
+                    minterms: alphabet.len(),
+                    engine: Engine::Derivative,
+                });
+            }
+        }
+        if len == max_len {
+            break;
+        }
+        current = current
+            .iter()
+            .flat_map(|s| alphabet.iter().map(move |&c| format!("{s}{c}")))
+            .collect();
+    }
+    Ok(Report {
+        verdict: Verdict::NoDifferenceUpTo {
+            max_len,
+            alphabet: alphabet.len(),
+        },
+        product_states: checked,
+        minterms: alphabet.len(),
+        engine: Engine::Derivative,
+    })
 }
 
 /// Generic shortest-witness BFS over a product whose states are pairs `(p, q)`.
@@ -218,8 +364,29 @@ mod tests {
     fn witness(v: Verdict) -> (String, Side) {
         match v {
             Verdict::Different(w) => (w.text, w.accepted_by),
-            Verdict::Equivalent => panic!("expected a witness"),
+            other => panic!("expected a witness, got {other:?}"),
         }
+    }
+
+    /// Bounded comparison (ADR-0011): real differences found exactly, no-difference labelled.
+    #[test]
+    fn bounded_backreferences() {
+        let budget = Budget::default().start();
+        let js = parse(Flavor::JavaScript, r"(a)|\1b").unwrap();
+        let py = parse(Flavor::Python, r"(a)|\1b").unwrap();
+        // JS: a back-reference to an unset group matches empty; Python: it fails.
+        let rep = compare(&js, &py, Op::Search, &budget).unwrap();
+        assert_eq!(witness(rep.verdict), ("b".into(), Side::Left));
+        let a = parse(Flavor::Python, r"(a+)\1").unwrap();
+        let b = parse(Flavor::Python, "(aa)+").unwrap();
+        let rep = compare(&a, &b, Op::FullMatch, &budget).unwrap();
+        assert!(matches!(rep.verdict, Verdict::NoDifferenceUpTo { max_len, .. } if max_len >= 8));
+        let a = parse(Flavor::Python, r"(.)\1").unwrap();
+        let b = parse(Flavor::Python, "..").unwrap();
+        assert_eq!(
+            witness(compare(&a, &b, Op::FullMatch, &budget).unwrap().verdict).1,
+            Side::Right
+        );
     }
 
     #[test]
