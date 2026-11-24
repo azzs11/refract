@@ -1,16 +1,16 @@
 //! JavaScript flavour versus the real V8 engine (spec/flavours/javascript.md).
 //!
 //! Same two checks as for Python: acceptance (per flag set) and semantics on random haystacks.
-//! Without `u` the analysis domain is BMP strings, so haystacks are BMP-only there.
+//! Without `u` the engine matches UTF-16 code units; astral haystacks are included for every
+//! flag set (the model lifts code-unit automata exactly, ADR-0007).
 //! Needs `node` on PATH; otherwise the tests print a note and pass vacuously.
 
 mod common;
 
 use common::cases;
 use proptest::prelude::*;
-use refract_core::automata::{alphabet_for, dfa};
 use refract_core::equiv::escape;
-use refract_core::{Budget, Engine, Flavor, Op, parse, regular::lower};
+use refract_core::{Budget, Flavor, Op, parse};
 use refract_oracle::{Engine as Oracle, EngineKind, Mode, Op as OOp, Outcome};
 use std::sync::Mutex;
 
@@ -107,15 +107,33 @@ const TOKENS: &[&str] = &[
     " ",
     "\n",
     "\r",
+    "\\p{Lu}",
+    "\\P{L}",
+    "\\p{sc=Greek}",
+    "\\p{Script_Extensions=Latn}",
+    "\\p{gc=Nd}",
+    "\\p{Emoji}",
+    "\\p{Bogus}",
+    "\\p{lu}",
+    "&&",
+    "--",
+    "\\q{ab|c}",
+    "\\q{}",
+    "[[a-z]",
+    "\\p{RGI_Emoji}",
+    "!",
+    "!!",
 ];
 
-const FLAGS: &[&str] = &["", "", "i", "m", "s", "u", "u", "iu", "mu", "su"];
+const FLAGS: &[&str] = &[
+    "", "", "i", "m", "s", "u", "u", "iu", "mu", "su", "y", "uy", "v", "v", "iv",
+];
 
 const BMP_CHARS: &[char] = &[
     'a', 'b', 'A', 'k', 'K', '\u{212A}', 'é', 'É', 's', 'S', 'ſ', '1', '\n', '\r', '\u{2028}', ' ',
     '\u{A0}', '\u{FEFF}', '_', '-', 'u', '{', '}', '\x01', '\\', 'c',
 ];
-const ASTRAL: &[char] = &['😀', '𝒜'];
+const ASTRAL: &[char] = &['😀', '𝒜', '\u{1F601}'];
 
 fn case() -> impl Strategy<Value = (String, &'static str)> {
     (
@@ -124,11 +142,9 @@ fn case() -> impl Strategy<Value = (String, &'static str)> {
     )
 }
 
-fn inputs(unicode: bool) -> BoxedStrategy<Vec<String>> {
+fn inputs(_unicode: bool) -> BoxedStrategy<Vec<String>> {
     let mut chars: Vec<char> = BMP_CHARS.to_vec();
-    if unicode {
-        chars.extend_from_slice(ASTRAL);
-    }
+    chars.extend_from_slice(ASTRAL);
     prop::collection::vec(
         prop::collection::vec(prop::sample::select(chars), 0..6)
             .prop_map(|v| v.into_iter().collect::<String>()),
@@ -187,9 +203,11 @@ proptest! {
         let budget = Budget::small().start();
         let hay_refs: Vec<&str> = hay.iter().map(String::as_str).collect();
         for (op, oop) in [(Op::FullMatch, OOp::Full), (Op::Search, OOp::Search)] {
-            let Ok(re) = lower(&ir, op, &budget) else { continue };
-            let alpha = alphabet_for(&[&re]);
-            let Ok(m) = dfa(&re, &alpha, Engine::Derivative, &budget) else { continue };
+            // The interpreter (ADR-0011) must agree with the engine on every pattern, including
+            // the non-regular ones the automata refuse.
+            interp_check(&ir, op, oop, &hay)?;
+            // Exact for every flag set, astral haystacks included (UTF-16 lifting, ADR-0007).
+            let Ok(m) = refract_core::automata::regex_dfa(&ir, op, &budget) else { continue };
             let Some(out) = with_node(|js| js.run_with_flags(&src, flags, oop, &hay_refs)) else {
                 return Ok(());
             };
@@ -289,8 +307,65 @@ fn known_cases() {
         ("(a)\\2", ""),
         ("(a)\\2", "u"),
     ];
+    let v_cases: &[(&str, &str)] = &[
+        ("[a-z&&b-y]", "v"),
+        ("[[a-z]&&[b-y]]", "v"),
+        ("[a&&b]", "v"),
+        ("[a&&&b]", "v"),
+        ("[a--b]", "v"),
+        ("[[a-z]--b]", "v"),
+        ("[a-z--b]", "v"),
+        ("[ab--c]", "v"),
+        ("[a&&b--c]", "v"),
+        ("[a-]", "v"),
+        ("[-a]", "v"),
+        ("[\\-a]", "v"),
+        ("[a(]", "v"),
+        ("[\\(]", "v"),
+        ("[a{]", "v"),
+        ("[a|b]", "v"),
+        ("[\\q{ab|c}]", "v"),
+        ("[^\\q{ab}]", "v"),
+        ("[^\\q{a|b}]", "v"),
+        ("[^\\q{}]", "v"),
+        ("[^[\\q{ab}]]", "v"),
+        ("[\\q{ab}&&\\q{ab|c}]", "v"),
+        ("[^\\q{ab}--\\q{ab}]", "v"),
+        ("[a!!b]", "v"),
+        ("[a##]", "v"),
+        ("[\\!]", "v"),
+        ("[\\&]", "v"),
+        ("[!]", "v"),
+        ("[&]", "v"),
+        ("[a&b]", "v"),
+        ("[]", "v"),
+        ("[^]", "v"),
+        ("\\p{RGI_Emoji}", "v"),
+        ("[\\p{RGI_Emoji}]", "v"),
+        ("[^\\p{RGI_Emoji}]", "v"),
+        ("[\\d--5]", "v"),
+        ("[\\w&&\\d]", "v"),
+        ("[\\b]", "v"),
+        ("[\\B]", "v"),
+        ("a{", "v"),
+        ("]", "v"),
+        ("[a-z&&b-y&&c]", "v"),
+        ("[[ab][cd]]", "v"),
+        ("[a[b]]", "v"),
+        ("[^a[b]]", "v"),
+        ("[a&&]", "v"),
+        ("[&&a]", "v"),
+        ("[a--]", "v"),
+        ("\\q{a}", "v"),
+        ("[\\q{a]", "v"),
+        ("[a-\\d]", "v"),
+        ("[\\cA]", "v"),
+        ("[\\u{1F600}]", "v"),
+        ("[😀-😂]", "v"),
+        ("\\P{RGI_Emoji}", "v"),
+    ];
     let mut failures = Vec::new();
-    for (src, flags) in cases {
+    for (src, flags) in cases.iter().chain(v_cases) {
         if let Err(e) = check_acceptance(src, flags) {
             failures.push(e.to_string());
         }
@@ -301,4 +376,55 @@ fn known_cases() {
         failures.len(),
         failures.join("\n")
     );
+}
+
+/// The interpreter's verdicts versus the real engine on the same haystacks.
+fn interp_check(
+    ir: &refract_core::Regex,
+    op: Op,
+    oop: OOp,
+    hay: &[String],
+) -> Result<(), TestCaseError> {
+    let mut mine = Vec::new();
+    for h in hay {
+        match refract_core::interp::is_match(ir, op, h, 200_000) {
+            Ok(b) => mine.push(Some(b)),
+            Err(_) => mine.push(None), // step limit: no prediction
+        }
+    }
+    let refs: Vec<&str> = hay.iter().map(String::as_str).collect();
+    let Some(out) = with_node(|js| {
+        js.run_with_flags(&src_of(&ir.pattern).0, src_of(&ir.pattern).1, oop, &refs)
+    }) else {
+        return Ok(());
+    };
+    let Outcome::Matched(real) = out.map_err(|e| TestCaseError::fail(e.to_string()))? else {
+        return Err(TestCaseError::fail(format!(
+            "we parsed {:?} but the engine rejects it",
+            ir.pattern
+        )));
+    };
+    for ((h, want), got) in hay.iter().zip(real).zip(mine) {
+        if let Some(got) = got {
+            prop_assert_eq!(
+                got,
+                want,
+                "interpreter {} of {:?} on {} vs engine",
+                op.name(),
+                ir.pattern,
+                escape(h)
+            );
+        }
+    }
+    Ok(())
+}
+
+/// `/src/flags` → (src, flags).
+fn src_of(p: &str) -> (String, &str) {
+    if let Some(rest) = p.strip_prefix('/')
+        && let Some(end) = rest.rfind('/')
+    {
+        return (rest[..end].to_string(), &rest[end + 1..]);
+    }
+    (p.to_string(), "")
 }

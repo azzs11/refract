@@ -1,7 +1,8 @@
 # Flavour: JavaScript (ECMAScript 2025 as implemented by V8 14.6 / Node 26)
 
-Status: front-end implemented (P3) for no flags and `u`, with `i m s` (and the match-irrelevant
-`d g`). `v` and `y` are reported as unsupported. Oracle: `oracle/node/runner.mjs`. Tables:
+Status: front-end implemented for no flags, `u` and `v`, with `i m s y` (and the match-irrelevant
+`d g`). `\p{..}` uses tables measured from V8 (`tools/gen_js_props.mjs`); only `v`-mode
+*properties of strings* (`\p{RGI_Emoji}` …) are reported as unsupported. Oracle: `oracle/node/runner.mjs`. Tables:
 `crates/refract-core/src/tables/js.rs`, measured from V8 by `tools/gen_js_tables.mjs`
 (Unicode 17.0).
 
@@ -42,16 +43,30 @@ empty; `(?i)` without `:` is an error.
 | Aspect | JavaScript |
 |---|---|
 | Matching | backtracking, leftmost-first; V8 can fall back to a linear engine (ReDoS lab, P5) |
-| `.` | any char except LineTerminator `\n \r    `; with `s`: any |
+| `.` | any char except LineTerminator `\n \r \u2028 \u2029`; with `s`: any |
 | `^` / `$` | haystack start / end (**`$` does not match before a final `\n`**); with `m`: line edges at any LineTerminator |
 | `\d \w` | ASCII only; under `iu`, `\w` also matches U+017F and U+212A |
 | `\s` | WhiteSpace ∪ LineTerminator (measured, includes U+FEFF) |
 | `i` | without `u`: `toUpperCase`-based Canonicalize (no ASCII↔non-ASCII); with `u`: simple case folding (Kelvin sign ~ `k`) |
 | Code units | without `u`: UTF-16 code units — an astral char is two units |
 
-## Analysis domain (ADR-0007)
+## `v` flag (Unicode sets)
 
-With `u`: all strings of scalar values. **Without `u`: strings of BMP characters only** — a
-verdict about `/^.$/` is about BMP haystacks, where `.` is one character. Differences that only
-appear with astral characters (e.g. `/^.$/` vs Python on "😀") are outside the analysed domain
-and reports say so; exact UTF-16 modelling is planned.
+Classes are set expressions: union, or one kind of operator per level — `&&` intersection or `--`
+subtraction — whose operands are nested classes, `\q{…}` string alternatives, class escapes or
+single characters (never ranges: `[a-z&&b]` is an error). Syntax characters `( ) [ ] { } / - |`
+must be escaped; reserved double punctuators (`!!`, `##`, …) are errors; a negated class must not
+contain strings (for `--`, only the first operand counts). Strings are tried longest first. Under
+`vi`, every operand is simple-case-folded before the operations, which equals closing each result
+under case folding.
+
+## Sticky `y`
+
+`test()` from `lastIndex` 0 only tries index 0: search is anchored at the start.
+
+## Code units (ADR-0007)
+
+Without `u`/`v` the engine matches **UTF-16 code units**; Refract lowers to a code-unit language
+(surrogate halves as pseudo code points) and lifts its automaton to scalar haystacks exactly, so
+`/^.$/` not matching "😀" is found and confirmed. With `u`/`v`, V8's search also tries positions
+inside surrogate pairs (docs/findings.md); that is modelled.

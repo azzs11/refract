@@ -67,6 +67,8 @@ struct Parser<'a> {
     src: &'a str,
     pos: usize,
     unicode: bool,
+    /// `v` flag: Unicode sets (implies Unicode mode).
+    vmode: bool,
     flags: Flags,
     group_count: u32,
     names: Vec<String>,
@@ -85,7 +87,8 @@ struct Parser<'a> {
 pub fn parse(pattern: &str) -> Result<Regex> {
     let (src, offset, flag_text) = split_literal(pattern);
     let mut flags = Flags::default();
-    let (mut unicode, mut v, mut deferred) = (false, false, None);
+    let (mut unicode, mut v, deferred) = (false, false, None);
+    let mut sticky = false;
     let mut seen = String::new();
     for (k, f) in flag_text.char_indices() {
         let span = Span::new(offset + src.len() + 1 + k, offset + src.len() + 2 + k);
@@ -100,12 +103,7 @@ pub fn parse(pattern: &str) -> Result<Regex> {
             'u' => unicode = true,
             'v' => v = true,
             'd' | 'g' => {}
-            'y' => {
-                deferred = Some(Error::unsupported(
-                    span,
-                    "the sticky flag y anchors test() at lastIndex; not analysed yet",
-                ));
-            }
+            'y' => sticky = true,
             other => return Err(Error::syntax(span, format!("invalid flag '{other}'"))),
         }
     }
@@ -115,17 +113,12 @@ pub fn parse(pattern: &str) -> Result<Regex> {
             "flags u and v are incompatible",
         ));
     }
-    if v {
-        return Err(Error::unsupported(
-            Span::new(0, pattern.len()),
-            "the v flag (set notation) is not analysed yet",
-        ));
-    }
     let (group_count, names) = prescan(src);
     let mut p = Parser {
         src,
         pos: 0,
-        unicode,
+        unicode: unicode || v,
+        vmode: v,
         flags,
         group_count,
         names,
@@ -149,13 +142,15 @@ pub fn parse(pattern: &str) -> Result<Regex> {
         pattern: pattern.to_string(),
         root: shift_node(root, offset),
         captures: p.captures,
-        domain: if unicode {
+        domain: if unicode || v {
             Domain::Scalars
         } else {
-            Domain::Bmp
+            Domain::Utf16
         },
         quirks: crate::ir::Quirks {
-            v8_mid_surrogate_search: unicode,
+            // A sticky search only tries index 0, so the mid-pair positions never arise.
+            mid_pair_search: (unicode || v) && !sticky,
+            sticky,
         },
     })
 }
@@ -417,6 +412,11 @@ impl<'a> Parser<'a> {
                     let (node, last) = self.group()?;
                     items.push((node, last));
                 }
+                '[' if self.vmode => {
+                    let set = self.class_v()?;
+                    let node = self.vset_node(set, self.span_from(at));
+                    items.push((node, Last::Atom));
+                }
                 '[' => {
                     let set = self.class()?;
                     items.push((
@@ -426,10 +426,11 @@ impl<'a> Parser<'a> {
                 }
                 '.' => {
                     self.bump();
+                    let all = self.negate(&CharSet::empty());
                     let set = if self.flags.s {
-                        CharSet::full()
+                        all
                     } else {
-                        CharSet::full().difference(&LINE_TERMS.iter().copied().collect())
+                        all.difference(&LINE_TERMS.iter().copied().collect())
                     };
                     items.push((
                         Node::new(NodeKind::Class(set), self.span_from(at)),
@@ -444,9 +445,20 @@ impl<'a> Parser<'a> {
                     let span = self.span_from(at);
                     let item = match esc {
                         Esc::Char(v) => (self.char_node(v, span), Last::Atom),
-                        Esc::Set(s) => (Node::new(NodeKind::Class(s), span), Last::Atom),
+                        // Under `i` the character-set matcher compares canonicalised chars,
+                        // so a class escape behaves as its case closure.
+                        Esc::Set(s) => (Node::new(NodeKind::Class(self.fold(s)), span), Last::Atom),
                         Esc::Assert(a) => (Node::new(NodeKind::Assert(a), span), Last::Anchor),
-                        Esc::Backref(g) => (Node::new(NodeKind::Backref(g), span), Last::Atom),
+                        Esc::Backref(g) => {
+                            let case = if self.flags.i {
+                                crate::ir::BackrefCase::Js {
+                                    unicode: self.unicode,
+                                }
+                            } else {
+                                crate::ir::BackrefCase::Exact
+                            };
+                            (Node::new(NodeKind::Backref(g, case), span), Last::Atom)
+                        }
                         Esc::Backslash => (self.char_node('\\' as u32, span), Last::Atom),
                     };
                     items.push(item);
@@ -509,7 +521,8 @@ impl<'a> Parser<'a> {
 
     fn char_node(&self, v: u32, span: Span) -> Node {
         let Some(c) = char::from_u32(v) else {
-            return Node::new(NodeKind::Class(CharSet::empty()), span);
+            // A surrogate code unit: matchable only without `u` (ADR-0007).
+            return Node::new(NodeKind::Class(self.unit_set(v, v)), span);
         };
         if !self.flags.i {
             return Node::new(NodeKind::Literal(c), span);
@@ -519,6 +532,37 @@ impl<'a> Parser<'a> {
             Node::new(NodeKind::Literal(c), span)
         } else {
             Node::new(NodeKind::Class(set), span)
+        }
+    }
+
+    /// `lo..=hi` as a set of matchable characters: without `u`, surrogate code units become
+    /// pseudo code points; with `u`, lone surrogate code points never match.
+    fn unit_set(&self, lo: u32, hi: u32) -> CharSet {
+        if self.unicode || hi < 0xD800 || lo > 0xDFFF {
+            return CharSet::from_ranges([(lo, hi)]);
+        }
+        let p = |u: u32| crate::charset::PSEUDO_BASE + (u - 0xD800);
+        CharSet::from_ranges([
+            (lo, hi.min(0xD7FF)),
+            (p(lo.max(0xD800)), p(hi.min(0xDFFF))),
+            (lo.max(0xE000), hi),
+        ])
+    }
+
+    fn atom_set(&self, a: &Esc) -> CharSet {
+        match a {
+            Esc::Char(v) => self.unit_set(*v, *v),
+            Esc::Set(s) => s.clone(),
+            _ => CharSet::empty(),
+        }
+    }
+
+    /// Complement over what a position can hold: code points with `u`, code units without.
+    fn negate(&self, set: &CharSet) -> CharSet {
+        if self.unicode {
+            set.complement()
+        } else {
+            set.units_complement()
         }
     }
 
@@ -543,7 +587,7 @@ impl<'a> Parser<'a> {
             _ => return None,
         };
         Some(if c.is_ascii_uppercase() {
-            base.complement()
+            self.negate(&base)
         } else {
             base
         })
@@ -698,12 +742,28 @@ impl<'a> Parser<'a> {
                     ));
                 }
                 let len = self.src[self.pos..].find('}').unwrap_or(0);
+                let body = self.src[self.pos..self.pos + len].to_string();
                 self.pos += len + 1;
-                self.defer(Error::unsupported(
-                    self.span_from(start),
-                    "Unicode property escapes need V8's property tables (not bundled yet)",
-                ));
-                Ok(Esc::Set(CharSet::empty()))
+                if self.vmode && PROPERTIES_OF_STRINGS.contains(&body.as_str()) && !in_class {
+                    if c == 'P' {
+                        return Err(Error::syntax(
+                            self.span_from(start),
+                            "Invalid property name",
+                        ));
+                    }
+                    self.defer(Error::unsupported(
+                        self.span_from(start),
+                        "properties of strings (emoji sequences) need sequence data (not bundled yet)",
+                    ));
+                    return Ok(Esc::Set(CharSet::empty()));
+                }
+                let Some(set) = js_property(&body) else {
+                    return Err(Error::syntax(
+                        self.span_from(start),
+                        "Invalid property name",
+                    ));
+                };
+                Ok(Esc::Set(if c == 'P' { set.complement() } else { set }))
             }
             '-' if u && in_class => ok('-'),
             'B' if in_class && u => Err(bad(self)),
@@ -824,7 +884,7 @@ impl<'a> Parser<'a> {
                 && self.peek() == Some('-')
                 && self.peek_nth(1).is_some_and(|c| c != ']');
             if !dash_range {
-                set = set.union(&atom_set(&a));
+                set = set.union(&self.atom_set(&a));
                 continue;
             }
             self.bump(); // -
@@ -838,7 +898,7 @@ impl<'a> Parser<'a> {
                             "Range out of order in character class",
                         ));
                     }
-                    set = set.union(&CharSet::from_ranges([(*lo, *hi)]));
+                    set = set.union(&self.unit_set(*lo, *hi));
                 }
                 _ if self.unicode => {
                     self.depth -= 1;
@@ -849,15 +909,274 @@ impl<'a> Parser<'a> {
                 }
                 _ => {
                     set = set
-                        .union(&atom_set(&a))
+                        .union(&self.atom_set(&a))
                         .union(&unit_set('-' as u32))
-                        .union(&atom_set(&b));
+                        .union(&self.atom_set(&b));
                 }
             }
         }
         self.depth -= 1;
         let set = self.fold(set);
-        Ok(if negated { set.complement() } else { set })
+        Ok(if negated { self.negate(&set) } else { set })
+    }
+
+    // ------------------------------------------------------------------ v-mode classes
+
+    /// Emits a `v`-mode class: its strings (longest first, as the engine tries them) and chars.
+    fn vset_node(&self, v: VSet, span: Span) -> Node {
+        let mut alts: Vec<Node> = Vec::new();
+        let mut strings: Vec<&Vec<char>> = v.strings.iter().collect();
+        strings.sort_by_key(|s| std::cmp::Reverse(s.len()));
+        for st in strings {
+            let parts: Vec<Node> = st.iter().map(|&c| self.char_node(c as u32, span)).collect();
+            alts.push(match parts.len() {
+                0 => Node::new(NodeKind::Empty, span),
+                _ => Node::new(NodeKind::Concat(parts), span),
+            });
+        }
+        let chars = Node::new(NodeKind::Class(self.fold(v.chars)), span);
+        if alts.is_empty() {
+            return chars;
+        }
+        alts.push(chars);
+        Node::new(NodeKind::Alt(alts), span)
+    }
+
+    /// Canonical form of a string element under `i` (so set operations compare folded strings).
+    fn canon(&self, c: char) -> char {
+        if !self.flags.i {
+            return c;
+        }
+        self.fold(CharSet::single(c)).min_char().unwrap_or(c)
+    }
+
+    /// `[ ClassContents ]` in `v` mode, cursor at `[`.
+    fn class_v(&mut self) -> Result<VSet> {
+        let open = self.here();
+        self.bump();
+        self.enter(open)?;
+        let negated = self.eat('^');
+        let r = self.class_contents_v(open);
+        self.depth -= 1;
+        let mut v = r?;
+        if !self.eat(']') {
+            return Err(Error::syntax(open, "Unterminated character class"));
+        }
+        if negated {
+            if v.may_strings {
+                return Err(Error::syntax(
+                    open,
+                    "Negated character class may contain strings",
+                ));
+            }
+            let folded = self.fold(v.chars);
+            v = VSet::chars(folded.complement());
+        }
+        Ok(v)
+    }
+
+    fn class_contents_v(&mut self, open: Span) -> Result<VSet> {
+        let invalid_op =
+            |p: &Self| Error::syntax(p.here(), "Invalid set operation in character class");
+        if self.peek() == Some(']') {
+            return Ok(VSet::default());
+        }
+        if self.rest_starts("&&") || self.rest_starts("--") {
+            return Err(invalid_op(self));
+        }
+        let (first, first_is_range) = self.class_item_v(true)?;
+        if self.rest_starts("&&") || self.rest_starts("--") {
+            if first_is_range {
+                return Err(invalid_op(self));
+            }
+            let op = self.peek();
+            let mut acc = first;
+            while (op == Some('&') && self.rest_starts("&&"))
+                || (op == Some('-') && self.rest_starts("--"))
+            {
+                self.pos += 2;
+                if op == Some('&') && self.peek() == Some('&') {
+                    return Err(Error::syntax(
+                        self.here(),
+                        "Invalid character in character class",
+                    ));
+                }
+                if self.peek() == Some(']') {
+                    return Err(Error::syntax(
+                        self.here(),
+                        "Invalid character in character class",
+                    ));
+                }
+                let (rhs, is_range) = self.class_item_v(false)?;
+                if is_range {
+                    return Err(invalid_op(self));
+                }
+                acc = if op == Some('&') {
+                    acc.intersect(rhs)
+                } else {
+                    acc.subtract(rhs)
+                };
+            }
+            if self.peek() != Some(']') {
+                return Err(invalid_op(self));
+            }
+            return Ok(acc);
+        }
+        let mut acc = first;
+        loop {
+            match self.peek() {
+                Some(']') => return Ok(acc),
+                None => return Err(Error::syntax(open, "Unterminated character class")),
+                _ if self.rest_starts("&&") || self.rest_starts("--") => {
+                    return Err(invalid_op(self));
+                }
+                _ => {
+                    let (item, _) = self.class_item_v(true)?;
+                    acc = acc.union(item);
+                }
+            }
+        }
+    }
+
+    fn rest_starts(&self, s: &str) -> bool {
+        self.src[self.pos..].starts_with(s)
+    }
+
+    /// One operand (nested class, `\q{..}`, class escape) or, when `ranges`, a range.
+    /// Returns whether it was a range or a single character (`a-z` / `a`): ranges cannot be
+    /// set-operation operands.
+    fn class_item_v(&mut self, ranges: bool) -> Result<(VSet, bool)> {
+        let start = self.pos;
+        match self.peek() {
+            Some('[') => return Ok((self.class_v()?, false)),
+            Some('\\') if self.rest_starts("\\q{") => {
+                self.pos += 3;
+                return Ok((self.class_strings()?, false));
+            }
+            Some('\\') => {
+                let next = self.src[self.pos + 1..].chars().next();
+                if let Some(c @ ('d' | 'D' | 's' | 'S' | 'w' | 'W' | 'p' | 'P')) = next {
+                    if matches!(c, 'p' | 'P') {
+                        let body: String = self.src[self.pos + 2..]
+                            .strip_prefix('{')
+                            .and_then(|r| r.split('}').next())
+                            .unwrap_or("")
+                            .to_string();
+                        if PROPERTIES_OF_STRINGS.contains(&body.as_str()) {
+                            self.pos += 3 + body.len() + 1;
+                            if c == 'P' {
+                                return Err(Error::syntax(
+                                    self.span_from(start),
+                                    "Invalid property name",
+                                ));
+                            }
+                            self.defer(Error::unsupported(
+                                self.span_from(start),
+                                "properties of strings (emoji sequences) need sequence data (not bundled yet)",
+                            ));
+                            return Ok((
+                                VSet {
+                                    may_strings: true,
+                                    ..VSet::default()
+                                },
+                                false,
+                            ));
+                        }
+                    }
+                    let Esc::Set(set) = self.escape(true)? else {
+                        return Err(Error::syntax(self.span_from(start), "Invalid escape"));
+                    };
+                    return Ok((VSet::chars(set), false));
+                }
+            }
+            _ => {}
+        }
+        let lo = self.class_set_char()?;
+        if ranges && self.peek() == Some('-') && !self.rest_starts("--") {
+            self.bump();
+            let hi = self.class_set_char()?;
+            if hi < lo {
+                return Err(Error::syntax(
+                    self.span_from(start),
+                    "Range out of order in character class",
+                ));
+            }
+            return Ok((VSet::chars(CharSet::from_ranges([(lo, hi)])), true));
+        }
+        Ok((VSet::chars(CharSet::from_ranges([(lo, lo)])), false))
+    }
+
+    /// `ClassSetCharacter`.
+    fn class_set_char(&mut self) -> Result<u32> {
+        let bad = |p: &Self| Error::syntax(p.here(), "Invalid character in character class");
+        let Some(c) = self.peek() else {
+            return Err(bad(self));
+        };
+        const DOUBLE: &str = "&!#$%*+,.:;<=>?@^`~";
+        if DOUBLE.contains(c) && self.src[self.pos + c.len_utf8()..].starts_with(c) {
+            return Err(Error::syntax(
+                self.here(),
+                "Invalid set operation in character class",
+            ));
+        }
+        if c == '\\' {
+            let next = self.src[self.pos + 1..].chars().next();
+            match next {
+                Some('b') => {
+                    self.pos += 2;
+                    return Ok(8);
+                }
+                Some(p) if "&-!#%,:;<=>@`~".contains(p) => {
+                    self.pos += 1 + p.len_utf8();
+                    return Ok(p as u32);
+                }
+                _ => {}
+            }
+            return match self.escape(true)? {
+                Esc::Char(v) => Ok(v),
+                _ => Err(Error::syntax(self.here(), "Invalid escape")),
+            };
+        }
+        if "()[]{}/-|".contains(c) {
+            return Err(bad(self));
+        }
+        self.bump();
+        Ok(c as u32)
+    }
+
+    /// After `\\q{`: `ClassString (| ClassString)* }`.
+    fn class_strings(&mut self) -> Result<VSet> {
+        let mut v = VSet::default();
+        let mut cur: Vec<char> = Vec::new();
+        loop {
+            match self.peek() {
+                None => return Err(Error::syntax(self.here(), "Invalid escape")),
+                Some('}') => {
+                    self.bump();
+                    break;
+                }
+                Some('|') => {
+                    self.bump();
+                    self.push_string(&mut v, std::mem::take(&mut cur));
+                }
+                _ => {
+                    let c = self.class_set_char()?;
+                    cur.push(char::from_u32(c).unwrap_or('\u{FFFD}'));
+                }
+            }
+        }
+        self.push_string(&mut v, cur);
+        Ok(v)
+    }
+
+    fn push_string(&self, v: &mut VSet, s: Vec<char>) {
+        if s.len() == 1 {
+            v.chars = v.chars.union(&CharSet::single(s[0]));
+        } else {
+            v.may_strings = true;
+            v.strings
+                .insert(s.into_iter().map(|c| self.canon(c)).collect());
+        }
     }
 
     fn enter(&mut self, span: Span) -> Result<()> {
@@ -1062,11 +1381,65 @@ impl<'a> Parser<'a> {
     }
 }
 
-fn atom_set(a: &Esc) -> CharSet {
-    match a {
-        Esc::Char(v) => CharSet::from_ranges([(*v, *v)]),
-        Esc::Set(s) => s.clone(),
-        _ => CharSet::empty(),
+/// A `v`-mode class value: characters plus strings of length != 1 (ES2024 ClassSetExpression).
+#[derive(Clone, Default)]
+struct VSet {
+    chars: CharSet,
+    strings: std::collections::BTreeSet<Vec<char>>,
+    may_strings: bool,
+}
+
+impl VSet {
+    fn chars(c: CharSet) -> VSet {
+        VSet {
+            chars: c,
+            ..VSet::default()
+        }
+    }
+    fn union(mut self, o: VSet) -> VSet {
+        self.chars = self.chars.union(&o.chars);
+        self.strings.extend(o.strings);
+        self.may_strings |= o.may_strings;
+        self
+    }
+    fn intersect(mut self, o: VSet) -> VSet {
+        self.chars = self.chars.intersect(&o.chars);
+        self.strings.retain(|s| o.strings.contains(s));
+        self.may_strings &= o.may_strings;
+        self
+    }
+    fn subtract(mut self, o: VSet) -> VSet {
+        self.chars = self.chars.difference(&o.chars);
+        self.strings.retain(|s| !o.strings.contains(s));
+        self
+    }
+}
+
+/// ES2024 properties of strings (sets of emoji sequences).
+const PROPERTIES_OF_STRINGS: &[&str] = &[
+    "Basic_Emoji",
+    "Emoji_Keycap_Sequence",
+    "RGI_Emoji_Modifier_Sequence",
+    "RGI_Emoji_Flag_Sequence",
+    "RGI_Emoji_Tag_Sequence",
+    "RGI_Emoji_ZWJ_Sequence",
+    "RGI_Emoji",
+];
+
+/// `\p{body}` in u mode, from tables measured on V8 (exact-case names).
+fn js_property(body: &str) -> Option<CharSet> {
+    use crate::tables::js_props as p;
+    let find = |list: &[(&str, &[(u32, u32)])], name: &str| {
+        list.iter()
+            .find(|(n, _)| *n == name)
+            .map(|(_, r)| CharSet::from_ranges(r.iter().copied()))
+    };
+    match body.split_once('=') {
+        Some(("General_Category" | "gc", v)) => find(p::GC, v),
+        Some(("Script" | "sc", v)) => find(p::SC, v),
+        Some(("Script_Extensions" | "scx", v)) => find(p::SCX, v),
+        Some(_) => None,
+        None => find(p::LONE, body),
     }
 }
 
@@ -1131,7 +1504,7 @@ mod tests {
     #[test]
     fn dollar_and_domain() {
         assert_eq!(ok("a$"), "(cat 'a' TextEnd)");
-        assert_eq!(parse("a").unwrap().domain, Domain::Bmp);
+        assert_eq!(parse("a").unwrap().domain, Domain::Utf16);
         assert_eq!(parse("/a/u").unwrap().domain, Domain::Scalars);
     }
 }

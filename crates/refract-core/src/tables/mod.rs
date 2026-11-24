@@ -9,7 +9,11 @@ pub mod go;
 #[allow(clippy::all)]
 pub mod java;
 #[allow(clippy::all)]
+pub mod java_props;
+#[allow(clippy::all)]
 pub mod js;
+#[allow(clippy::all)]
+pub mod js_props;
 #[allow(clippy::all)]
 pub mod python;
 

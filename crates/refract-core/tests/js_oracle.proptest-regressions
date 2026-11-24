@@ -11,3 +11,8 @@ cc 94864c91d7ed5d3e78046eb3cc0db8ec4685535cecc16f991ab4ce53909e245c # shrinks to
 cc e77356a13a3dbb840db10722e7ed8124fd4be0c35d04de64376d8721fcfe082b # shrinks to ((src, flags), hay) = (("k", "i"), ["K"])
 cc efc81d126313322d9947f3885c8d108a6d2f5299616f7ba43041d819775bf318 # shrinks to ((src, flags), hay) = (("\\B", "iu"), ["aéa😀a"])
 cc 46ef73e7c2ed0e9076ae6772dcb041d304bccc29cc751500c0ad3645f64173e7 # shrinks to ((src, flags), hay) = (("(?<!\\BK)$", "i"), ["ak"])
+cc 60a42d31ee79d717b96ed46c6c7e1259fb23dd74d0d16848a3ac530baa84013a # shrinks to (src, flags) = ("a\\p{RGI_Emoji}", "v")
+cc de8582eb6061290c807598d31f4d991241244791949003aa5f646260423f34eb # shrinks to ((src, flags), hay) = (("\\uD83D\\uDE00", "m"), ["😀"])
+cc b05c03c8f862354bd9a1ecbd78b8eb8a9ea0e3b753f00dc9fdceb329d820e9e9 # shrinks to ((src, flags), hay) = ((".(?=^)}", "m"), ["😀}"])
+cc a2d3d7cf6c8778fbd7dab6d09af9c05b37c3022949472740747105a5a5e86aa9 # shrinks to ((src, flags), hay) = (("😀^", "m"), ["😀"])
+cc e1fcd9b55b1ad07a34d35500054af69a77b5be1e1c5f305f08a16e7ada499386 # shrinks to ((src, flags), hay) = (("\\0{1,3}", "m"), ["😀"])
