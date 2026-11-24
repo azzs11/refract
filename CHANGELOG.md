@@ -5,6 +5,20 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added — P4: the remaining limits
+- **Look-ahead inside unbounded repetition** (e.g. `^(?:(?!ab).)*$`): least-fixed-point terms
+  (`Re::Fix`/`Var`) in the derivative engine.
+- **Atomic groups and possessive quantifiers**, exact for prefix-free bodies (ADR-0010).
+- **Back-references and other non-regular constructs**: a backtracking reference interpreter with
+  each engine's rules and a bounded comparison labelled "no difference up to length N"
+  (ADR-0011); the interpreter is checked against all four engines.
+- **JavaScript**: `\p{..}` from V8-measured tables, the `v` flag (set operations, `\q{}`), the `y`
+  flag, and exact UTF-16 code-unit semantics without `u` (ADR-0007, revised).
+- **Java**: `\p{..}` from JDK-generated tables (all block/script spellings); `hasSupplementary`
+  and the code-unit search it implies; unit-wise base scan in `\b`.
+- Findings: two JDK behaviours (docs/findings.md).
+
+
 ### Added — P3: four real engines, look-around, cross-engine command
 - **Front-ends for Python `re`, JavaScript (V8, Annex B and `u`), Go `regexp` and Java
   `java.util.regex`**, each a port of the engine's own parser logic, with specs in

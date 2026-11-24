@@ -7,7 +7,7 @@ a formal model of what it matches, and tells you — with the **shortest concret
 two patterns (or one pattern in two engines) disagree. Every "different" verdict is replayed on
 the real engine before it is called confirmed.
 
-> **Status: pre-alpha (phases P0–P3).** Five flavours are implemented end to end — **JavaScript
+> **Status: pre-alpha (phases P0–P4).** Five flavours are implemented end to end — **JavaScript
 > (V8), Python `re`, Go `regexp`, Java `java.util.regex`** and Rust `regex` — including
 > **look-around and assertions anywhere in the pattern**. Every verdict is replayed on the real
 > engines. Next: match spans and the remaining non-regular constructs (P4), then the ReDoS lab
@@ -91,9 +91,12 @@ Exit codes: `0` equivalent, `1` different (or pattern rejected), `2` usage/analy
    shortest, most readable distinguishing string ([spec/witness.md](spec/witness.md)).
 5. **Real-engine replay**: every witness and every rejection is run on the real engines; verdicts
    are `proven`, `confirmed`, `predicted` (engine unavailable) or `contradicted` (a bug, exit 3).
-6. **Honest limits**: back-references, atomic groups, possessive quantifiers and a few
-   constructs (listed per flavour) are refused with their location, never guessed; JS without `u`
-   is analysed over BMP haystacks and says so.
+6. **Beyond regular**: back-references are not regular, so comparisons that involve them are
+   **bounded** — every haystack up to length N, checked by a reference interpreter with each
+   engine's rules — and reported as "no difference up to length N", never as proven. Atomic groups
+   and possessive quantifiers are exact when their body is prefix-free.
+7. **Honest limits**: the few constructs still not analysed (Java `\X`, `\b{g}`, `\N{}`, `(?U)`,
+   `(?c)`; Python `\N{}`; JS properties of strings) are refused with their location.
 
 ## Evidence (from the test suite)
 
@@ -115,10 +118,10 @@ to use the pinned engine images.
 
 | Flavour | Front-end | Oracle | Unicode | Notes |
 |---|---|---|---|---|
-| JavaScript | ✅ no flags (Annex B) + `u`, `i m s` | V8 14.6 (Node 26) | 17.0 | `v`, `y`, `\p` not analysed yet; without `u`: BMP haystacks |
+| JavaScript | ✅ no flags (Annex B, UTF-16 units), `u`, `v`, `i m s y`, `\p{..}` | V8 14.6 (Node 26) | 17.0 | properties of strings not analysed yet |
 | Python `re` | ✅ | CPython 3.15.2 | 17.0.0 | `\N{..}` not analysed yet |
 | Go `regexp` | ✅ incl. `\p{..}` | Go 1.27.4 | 17.0.0 | |
-| Java | ✅ incl. look-behind windows | JDK 25.0.5.1 | JDK 25 | `\p`, `\X`, `(?U)`, `(?c)` not analysed yet |
+| Java | ✅ incl. `\p{..}`, look-behind windows, code-unit search | JDK 25.0.5.1 | JDK 25 | `\X`, `\b{g}`, `(?U)`, `(?c)` not analysed yet |
 | Rust `regex` | ✅ | in-process | regex-syntax | bonus flavour |
 | PCRE2, .NET, Ruby | planned | | | |
 
