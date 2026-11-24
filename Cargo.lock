@@ -446,6 +446,7 @@ dependencies = [
  "clap",
  "insta",
  "refract-core",
+ "refract-oracle",
  "regex",
  "serde_json",
 ]
@@ -455,9 +456,17 @@ name = "refract-core"
 version = "0.1.0"
 dependencies = [
  "proptest",
+ "refract-oracle",
  "regex",
  "regex-syntax",
  "thiserror",
+]
+
+[[package]]
+name = "refract-oracle"
+version = "0.1.0"
+dependencies = [
+ "serde_json",
 ]
 
 [[package]]
