@@ -30,12 +30,20 @@ impl fmt::Display for Span {
 /// What went wrong.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ErrorKind {
-    /// The pattern is not valid in the chosen flavour (the real engine would reject it too).
+    /// The pattern is not valid in the chosen flavour: the real engine rejects it too.
     Syntax,
-    /// The pattern is valid but uses a construct this analysis does not handle (yet).
+    /// The pattern is valid in its flavour (the real engine accepts it) but uses a construct this
+    /// analysis does not handle yet. Never used for something the engine itself rejects.
     Unsupported,
     /// An analysis hit its state or time budget.
     Budget,
+}
+
+impl ErrorKind {
+    /// True when the error still means "the real engine accepts this pattern".
+    pub fn engine_accepts(&self) -> bool {
+        !matches!(self, ErrorKind::Syntax)
+    }
 }
 
 /// A user-facing error with a precise location.

@@ -6,7 +6,7 @@
 use crate::charset::CharSet;
 use crate::error::{Error, Result, Span};
 use crate::flavor::{Flavor, MatchPolicy, Profile};
-use crate::ir::{Assertion, Capture, Group, Node, NodeKind, Regex, Repeat};
+use crate::ir::{Assertion, Capture, Group, LineTerms, Node, NodeKind, Regex, Repeat, WordSet};
 use crate::unicode;
 
 pub static PROFILE: Profile = Profile {
@@ -97,6 +97,8 @@ pub fn parse(pattern: &str) -> Result<Regex> {
         pattern: pattern.to_string(),
         root,
         captures: p.captures,
+        domain: crate::ir::Domain::Scalars,
+        quirks: crate::ir::Quirks::default(),
     })
 }
 
@@ -364,13 +366,13 @@ impl<'a> Parser<'a> {
             } else {
                 match self.peek() {
                     Some('=') | Some('!') => {
-                        return Err(Error::unsupported(
+                        return Err(Error::syntax(
                             self.span_from(start),
                             "look-around is not supported by the Rust regex engine",
                         ));
                     }
                     Some('<') => {
-                        return Err(Error::unsupported(
+                        return Err(Error::syntax(
                             self.span_from(start),
                             "look-behind is not supported by the Rust regex engine",
                         ));
@@ -557,7 +559,7 @@ impl<'a> Parser<'a> {
                 self.bump();
                 let a = if self.flags.m {
                     Assertion::LineStart {
-                        crlf: self.flags.crlf,
+                        terms: self.line_terms(),
                     }
                 } else {
                     Assertion::TextStart
@@ -568,7 +570,7 @@ impl<'a> Parser<'a> {
                 self.bump();
                 let a = if self.flags.m {
                     Assertion::LineEnd {
-                        crlf: self.flags.crlf,
+                        terms: self.line_terms(),
                     }
                 } else {
                     Assertion::TextEnd
@@ -600,6 +602,14 @@ impl<'a> Parser<'a> {
                 let span = self.span_from(start);
                 self.literal_node(c, false, span)
             }
+        }
+    }
+
+    fn line_terms(&self) -> LineTerms {
+        if self.flags.crlf {
+            LineTerms::CrLf
+        } else {
+            LineTerms::Lf
         }
     }
 
@@ -692,7 +702,7 @@ impl<'a> Parser<'a> {
                 }))
             }
             'p' | 'P' => self.parse_unicode_class(start, c == 'P'),
-            '0'..='9' => Err(Error::unsupported(
+            '0'..='9' => Err(Error::syntax(
                 self.span_from(start),
                 "backreferences are not supported by the Rust regex engine",
             )),
@@ -703,13 +713,13 @@ impl<'a> Parser<'a> {
             'A' => Ok(Escape::Assert(Assertion::TextStart)),
             'z' => Ok(Escape::Assert(Assertion::TextEnd)),
             '<' => Ok(Escape::Assert(Assertion::WordStart {
-                unicode: self.flags.u,
+                word: WordSet::rust(self.flags.u),
             })),
             '>' => Ok(Escape::Assert(Assertion::WordEnd {
-                unicode: self.flags.u,
+                word: WordSet::rust(self.flags.u),
             })),
             'B' => Ok(Escape::Assert(Assertion::NotWordBoundary {
-                unicode: self.flags.u,
+                word: WordSet::rust(self.flags.u),
             })),
             'b' => self.parse_word_boundary(start),
             c if is_escapeable(c) => lit(c),
@@ -731,10 +741,18 @@ impl<'a> Parser<'a> {
             if name_len > 0 && rest[name_len..].starts_with('}') {
                 let name = &rest[..name_len];
                 let a = match name {
-                    "start" => Assertion::WordStart { unicode },
-                    "end" => Assertion::WordEnd { unicode },
-                    "start-half" => Assertion::WordStartHalf { unicode },
-                    "end-half" => Assertion::WordEndHalf { unicode },
+                    "start" => Assertion::WordStart {
+                        word: WordSet::rust(unicode),
+                    },
+                    "end" => Assertion::WordEnd {
+                        word: WordSet::rust(unicode),
+                    },
+                    "start-half" => Assertion::WordStartHalf {
+                        word: WordSet::rust(unicode),
+                    },
+                    "end-half" => Assertion::WordEndHalf {
+                        word: WordSet::rust(unicode),
+                    },
                     _ => {
                         self.pos += name_len + 2;
                         return Err(Error::syntax(
@@ -747,7 +765,9 @@ impl<'a> Parser<'a> {
                 return Ok(Escape::Assert(a));
             }
         }
-        Ok(Escape::Assert(Assertion::WordBoundary { unicode }))
+        Ok(Escape::Assert(Assertion::WordBoundary {
+            word: WordSet::rust(unicode),
+        }))
     }
 
     /// After `\x`, `\u` or `\U`: `digits` fixed hex digits, or `{...}`.
@@ -1089,7 +1109,7 @@ mod tests {
         assert_eq!(ok("^$"), "(cat TextStart TextEnd)");
         assert_eq!(
             ok("(?m)^$"),
-            "(cat LineStart { crlf: false } LineEnd { crlf: false })"
+            "(cat LineStart { terms: Lf } LineEnd { terms: Lf })"
         );
         assert_eq!(ok("[a-c]"), "[a-c]");
         assert_eq!(ok("[]a]"), "[\\]a]");
@@ -1130,8 +1150,8 @@ mod tests {
         assert_eq!(err("(a").span, Span::new(0, 1));
         assert_eq!(err("*").kind, crate::error::ErrorKind::Syntax);
         assert_eq!(err("a{3,2}").kind, crate::error::ErrorKind::Syntax);
-        assert_eq!(err(r"(a)\1").kind, crate::error::ErrorKind::Unsupported);
-        assert_eq!(err("(?=a)").kind, crate::error::ErrorKind::Unsupported);
+        assert_eq!(err(r"(a)\1").kind, crate::error::ErrorKind::Syntax);
+        assert_eq!(err("(?=a)").kind, crate::error::ErrorKind::Syntax);
         assert_eq!(err("[a").kind, crate::error::ErrorKind::Syntax);
         assert_eq!(err("(?i)*").kind, crate::error::ErrorKind::Syntax);
         assert_eq!(err("(?)").kind, crate::error::ErrorKind::Syntax);

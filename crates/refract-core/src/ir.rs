@@ -18,6 +18,28 @@ pub struct Regex {
     pub root: Node,
     /// Capture groups in order of their opening parenthesis; index 0 is group 1.
     pub captures: Vec<Option<String>>,
+    /// Haystacks the analysis covers (ADR-0007).
+    pub domain: Domain,
+    /// Engine behaviour that deviates from the flavour's specification but that a verdict about
+    /// the real engine must model (docs/findings.md).
+    pub quirks: Quirks,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+pub struct Quirks {
+    /// V8 with `u`: search also tries positions inside a surrogate pair, where `^ $ \b` are
+    /// false, `\B` is true and look-arounds see no characters (docs/findings.md).
+    pub v8_mid_surrogate_search: bool,
+}
+
+/// The set of haystacks a verdict is about.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum Domain {
+    /// All strings of Unicode scalar values.
+    Scalars,
+    /// Strings of Basic Multilingual Plane characters only. Used for JavaScript without the `u`
+    /// or `v` flag, which matches UTF-16 code units: an astral character there is two units.
+    Bmp,
 }
 
 /// One IR node with the span of pattern text it came from.
@@ -54,6 +76,11 @@ pub struct Look {
     pub sub: Box<Node>,
     pub behind: bool,
     pub negated: bool,
+    /// Java only: the look-behind tries start positions `[i - max, i - min]` from its compile-time
+    /// length estimate (`TreeInfo`), so its body is restricted to lengths in `min..=max` (`None`
+    /// = unbounded). An empty window (`max < min`, after Java's int overflow) never matches.
+    pub window: Option<(u32, Option<u32>)>,
+    pub window_empty: bool,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -98,38 +125,118 @@ pub enum Assertion {
     TextEnd,
     /// End of the haystack or just before a final `\n` (Python/PCRE2/Java/.NET/Ruby `$`, `\Z`).
     TextEndOrFinalNewline,
-    /// Start of a line: haystack start or after `\n` (after `\r` or `\n`, not between `\r\n`,
-    /// when `crlf`).
+    /// Start of a line: haystack start or right after a line terminator (see [`LineTerms`]).
     LineStart {
-        crlf: bool,
+        terms: LineTerms,
     },
-    /// End of a line: haystack end or before `\n` (before `\r` or `\n`, not between `\r\n`,
-    /// when `crlf`).
+    /// End of a line: haystack end or right before a line terminator (see [`LineTerms`]).
     LineEnd {
-        crlf: bool,
+        terms: LineTerms,
+    },
+    /// Java `$` without multi-line (and `\Z`): at the end, or before a final line terminator
+    /// (`\r\n`, or one of `\n \r \u{85} \u{2028} \u{2029}`, never between `\r` and `\n`).
+    /// With `unix` (`(?d)`), only `\n` terminates lines.
+    JavaDollar {
+        unix: bool,
+    },
+    /// Java multi-line `$`: before any line terminator (not between `\r\n`) or at the end.
+    JavaLineEnd {
+        unix: bool,
+    },
+    /// Java multi-line `^`: at the start or after a line terminator (not between `\r\n`), and
+    /// never at the very end of the input.
+    JavaLineStart {
+        unix: bool,
     },
     WordBoundary {
-        unicode: bool,
+        word: WordSet,
     },
     NotWordBoundary {
-        unicode: bool,
+        word: WordSet,
     },
     /// `\<` / `\b{start}`: word char on the right, non-word on the left.
     WordStart {
-        unicode: bool,
+        word: WordSet,
     },
     /// `\>` / `\b{end}`.
     WordEnd {
-        unicode: bool,
+        word: WordSet,
     },
     /// `\b{start-half}`: non-word (or nothing) on the left.
     WordStartHalf {
-        unicode: bool,
+        word: WordSet,
     },
     /// `\b{end-half}`: non-word (or nothing) on the right.
     WordEndHalf {
-        unicode: bool,
+        word: WordSet,
     },
+}
+
+/// The word-character set behind `\b`, `\B` and friends; each engine defines `\w` differently.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum WordSet {
+    /// `[0-9A-Za-z_]` (JS, Go, Java; Rust `-u`; Python `a`).
+    Ascii,
+    /// UTS #18 word characters (Rust Unicode mode).
+    Rust,
+    /// CPython's `\w` (`str.isalnum()` or `_`), measured.
+    Python,
+    /// JS `\w` under `iu`: ASCII word chars plus U+017F and U+212A.
+    JsIgnoreCaseUnicode,
+    /// Java: ASCII word chars, plus a non-spacing mark that follows (through other marks) a
+    /// Unicode letter or digit. Context-dependent, so lowering builds it specially.
+    Java,
+}
+
+impl WordSet {
+    pub fn rust(unicode: bool) -> WordSet {
+        if unicode {
+            WordSet::Rust
+        } else {
+            WordSet::Ascii
+        }
+    }
+
+    pub fn python(unicode: bool) -> WordSet {
+        if unicode {
+            WordSet::Python
+        } else {
+            WordSet::Ascii
+        }
+    }
+
+    pub fn chars(self) -> CharSet {
+        match self {
+            WordSet::Ascii => crate::unicode::posix_class("word").unwrap_or_default(),
+            WordSet::Rust => crate::unicode::perl_word().clone(),
+            WordSet::Python => crate::tables::python_word().clone(),
+            WordSet::JsIgnoreCaseUnicode => crate::tables::js_word_iu().clone(),
+            // The context-free part; `regular` adds the mark rule.
+            WordSet::Java => crate::unicode::posix_class("word").unwrap_or_default(),
+        }
+    }
+}
+
+/// Which characters end a line for multi-line `^` / `$`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum LineTerms {
+    /// `\n` only (Rust, Go, Python).
+    Lf,
+    /// `\r` or `\n`, but never between the two of a `\r\n` (Rust `R` flag).
+    CrLf,
+    /// Each of `\n \r \u{2028} \u{2029}` (ECMAScript LineTerminator).
+    Js,
+}
+
+impl LineTerms {
+    /// The terminator characters, when a single character always ends a line.
+    pub fn chars(self) -> Option<&'static [char]> {
+        match self {
+            LineTerms::Lf => Some(&['\n']),
+            LineTerms::Js => Some(&['\n', '\r', '\u{2028}', '\u{2029}']),
+            LineTerms::CrLf => None,
+        }
+    }
 }
 
 impl Node {
@@ -156,6 +263,48 @@ impl Node {
             | NodeKind::Class(_)
             | NodeKind::Assert(_)
             | NodeKind::Backref(_) => {}
+        }
+    }
+
+    /// (minimum, maximum) number of characters this node can consume; `None` = unbounded.
+    /// A backreference is (0, unbounded): its width depends on what the group matched.
+    pub fn width(&self) -> (usize, Option<usize>) {
+        match &self.kind {
+            NodeKind::Empty | NodeKind::Assert(_) => (0, Some(0)),
+            NodeKind::Literal(_) => (1, Some(1)),
+            NodeKind::Class(_) => (1, Some(1)),
+            NodeKind::Group(g) => g.sub.width(),
+            NodeKind::Look(_) => (0, Some(0)),
+            // Unknown statically: the referenced group can match anything.
+            NodeKind::Backref(_) => (0, None),
+            NodeKind::Conditional(c) => {
+                let y = c.yes.width();
+                let n = c.no.as_ref().map_or((0, Some(0)), |n| n.width());
+                (y.0.min(n.0), y.1.zip(n.1).map(|(a, b)| a.max(b)))
+            }
+            NodeKind::Concat(xs) => xs.iter().fold((0, Some(0)), |(a, b), x| {
+                let (c, d) = x.width();
+                (
+                    a.saturating_add(c),
+                    b.zip(d).map(|(b, d)| b.saturating_add(d)),
+                )
+            }),
+            NodeKind::Alt(xs) => {
+                let ws: Vec<_> = xs.iter().map(Node::width).collect();
+                let min = ws.iter().map(|w| w.0).min().unwrap_or(0);
+                let max = ws.iter().try_fold(0usize, |acc, w| w.1.map(|m| acc.max(m)));
+                (min, max)
+            }
+            NodeKind::Repeat(r) => {
+                let (a, b) = r.sub.width();
+                let min = a.saturating_mul(r.min as usize);
+                let max = match (b, r.max) {
+                    (Some(0), _) => Some(0),
+                    (Some(b), Some(m)) => Some(b.saturating_mul(m as usize)),
+                    _ => None,
+                };
+                (min, max)
+            }
         }
     }
 
