@@ -21,6 +21,7 @@ pub mod flavor;
 pub mod ir;
 pub mod minimize;
 pub mod regular;
+pub mod tables;
 pub mod thompson;
 pub mod unicode;
 

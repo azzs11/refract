@@ -4,6 +4,10 @@
 //! reports and the docs show to explain *why* two engines disagree. Each profile mirrors a
 //! `spec/flavours/<name>.md` document, which is written before the parser (spec before code).
 
+mod go;
+mod java;
+mod js;
+mod python;
 mod rust;
 
 use crate::error::{Error, Result, Span};
@@ -50,13 +54,20 @@ impl Flavor {
     }
 
     pub fn is_implemented(self) -> bool {
-        matches!(self, Flavor::Rust)
+        matches!(
+            self,
+            Flavor::Rust | Flavor::Python | Flavor::JavaScript | Flavor::Go | Flavor::Java
+        )
     }
 
     /// The semantics profile, when the flavour has a front-end.
     pub fn profile(self) -> Option<&'static Profile> {
         match self {
             Flavor::Rust => Some(&rust::PROFILE),
+            Flavor::Python => Some(&python::PROFILE),
+            Flavor::JavaScript => Some(&js::PROFILE),
+            Flavor::Go => Some(&go::PROFILE),
+            Flavor::Java => Some(&java::PROFILE),
             _ => None,
         }
     }
@@ -123,6 +134,10 @@ pub struct Profile {
 pub fn parse(flavor: Flavor, pattern: &str) -> Result<Regex> {
     match flavor {
         Flavor::Rust => rust::parse(pattern),
+        Flavor::Python => python::parse(pattern),
+        Flavor::JavaScript => js::parse(pattern),
+        Flavor::Go => go::parse(pattern),
+        Flavor::Java => java::parse(pattern),
         other => Err(Error::unsupported(
             Span::new(0, pattern.len()),
             format!("the {other} front-end is not implemented yet (planned for phase P3)"),

@@ -68,3 +68,27 @@ pub fn arb_input() -> impl Strategy<Value = String> {
     prop::collection::vec(prop::sample::select(vec!['a', 'b', 'c', 'x']), 0..7)
         .prop_map(|v| v.into_iter().collect())
 }
+
+/// Random terms that also contain look-behind atoms (derivative engine only).
+pub fn arb_re_with_behind() -> impl Strategy<Value = Re> {
+    let behind = (arb_classic_re(), any::<bool>()).prop_map(|(sub, negated)| Re::Behind {
+        sub: Box::new(sub),
+        negated,
+    });
+    let leaf = prop_oneof![
+        5 => arb_set().prop_map(Re::Set),
+        1 => Just(Re::Eps),
+        3 => behind,
+    ];
+    leaf.prop_recursive(4, 24, 3, |inner| {
+        prop_oneof![
+            3 => prop::collection::vec(inner.clone(), 2..4).prop_map(Re::Concat),
+            3 => prop::collection::vec(inner.clone(), 2..4).prop_map(Re::Alt),
+            2 => (inner.clone(), 0u32..3, prop::option::of(0u32..3)).prop_map(|(r, min, extra)| {
+                Re::Repeat(Box::new(r), min, extra.map(|e| min + e))
+            }),
+            1 => prop::collection::vec(inner.clone(), 2..3).prop_map(Re::And),
+            1 => inner.prop_map(|r| Re::Not(Box::new(r))),
+        ]
+    })
+}

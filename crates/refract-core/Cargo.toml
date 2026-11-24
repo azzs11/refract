@@ -16,4 +16,5 @@ thiserror = "2.0.21"
 
 [dev-dependencies]
 proptest = "1.12.0"
+refract-oracle = { path = "../refract-oracle" }
 regex = "1.13.2"

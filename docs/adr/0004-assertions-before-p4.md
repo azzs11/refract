@@ -1,5 +1,8 @@
 # ADR-0004: Assertions — resolve statically or refuse
 
+**Status: superseded by [ADR-0008](0008-lookaround-construction.md)** (P3: assertions anywhere are exact).
+
+
 **Context.** Anchors and word boundaries are zero-width and context-dependent; a plain DFA over
 characters cannot express them directly. Full support (derivatives with look-around context, as
 in RE# / .NET NonBacktracking) is planned for P4, but P1–P2 need anchored patterns, which are

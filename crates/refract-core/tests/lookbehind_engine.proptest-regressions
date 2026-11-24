@@ -1,0 +1,8 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc a1029e2c5c4e877c74b2de7d89f005735792356ef4a920dab0bb8e1950ace9d5 # shrinks to re = Alt([Set([a]), Behind { sub: Set([a]), negated: false }]), inputs = [""]
+cc db1c0a9886aced0293e6246306eac9411b64bb02688835db097cdfed39ed04f1 # shrinks to a = Alt([Behind { sub: Repeat(Alt([Set([a]), Eps]), 0, None), negated: true }, Set([a])]), b = Repeat(Set([a]), 1, None)

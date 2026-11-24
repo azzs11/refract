@@ -8,6 +8,9 @@ consequences. Status values: accepted, superseded (with a link).
 | [0001](0001-rust-workspace.md) | Rust workspace with a pure core | accepted |
 | [0002](0002-unicode-tables-rust-flavour.md) | Unicode tables for the Rust flavour come from regex-syntax | accepted |
 | [0003](0003-minterm-alphabet.md) | Automata over minterms of Unicode scalar values | accepted |
-| [0004](0004-assertions-before-p4.md) | Assertions: resolve statically or refuse | accepted |
+| [0004](0004-assertions-before-p4.md) | Assertions: resolve statically or refuse | superseded by 0008 |
 | [0005](0005-in-process-rust-oracle.md) | In-process oracle for the Rust flavour | accepted |
 | [0006](0006-canonical-witness.md) | Canonical shortest readable witness | accepted |
+| [0007](0007-analysis-domain.md) | Analysis domains (BMP for JS without `u`) | accepted |
+| [0008](0008-lookaround-construction.md) | Exact look-around by continuations and look-behind context | accepted |
+| [0009](0009-engine-measured-tables-and-oracle.md) | Tables measured from each engine; one oracle protocol | accepted |

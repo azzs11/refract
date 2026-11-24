@@ -18,6 +18,8 @@ Source: `crates/refract-core/src/ir.rs`.
 | `Repeat{sub, min, max, greedy}` | `max = None` is unbounded; greediness only affects spans |
 | `Group{sub, capture}` | capture index (1-based) and optional name, or non-capturing |
 | `Assert(a)` | zero-width assertion, see below |
+| `Look{sub, behind, negated, window}` | look-around; `window` is Java's look-behind length window |
+| `Backref(n)`, `Conditional{..}` | non-regular; parsed exactly, analysed from P4 |
 
 Every node carries the byte `Span` of the pattern text it came from, so any later finding (an
 unsupported construct, a ReDoS pump, a non-portable class) can point at the exact source.
@@ -47,31 +49,37 @@ property-tested against membership definitions and Boolean laws.
 | `TextStart` | i = 0 |
 | `TextEnd` | i = n |
 | `TextEndOrFinalNewline` | i = n, or i = n−1 and the last char is `\n` |
-| `LineStart{crlf}` | i = 0 or char i−1 is `\n` (crlf: `\r` or `\n`, but not between `\r\n`) |
-| `LineEnd{crlf}` | i = n or char i is `\n` (crlf: `\r` or `\n`, but not between `\r\n`) |
-| `WordBoundary{unicode}` | word-ness of chars i−1 and i differ |
-| `NotWordBoundary{unicode}` | they are the same |
+| `LineStart{terms}` | i = 0 or char i−1 is a terminator (`Lf`: `\n`; `Js`: `\n \r \u2028 \u2029`; `CrLf`: not between `\r\n`) |
+| `LineEnd{terms}` | i = n or char i is a terminator (same `terms`) |
+| `WordBoundary{word}` | word-ness of chars i−1 and i differ (`word` = that engine's `\w`; Java adds marks after letters) |
+| `NotWordBoundary{word}` | they are the same |
+| `JavaDollar{unix}` / `JavaLineEnd{unix}` / `JavaLineStart{unix}` | Java's `$`, `(?m)$`, `(?m)^` (spec/flavours/java.md) |
 | `WordStart` / `WordEnd` | non-word→word / word→non-word |
 | `WordStartHalf` / `WordEndHalf` | left / right side is non-word or absent |
 
 ## Operations and lowering
 
 A pattern does not denote one language; a *(pattern, operation)* pair does (plan review item
-5). `regular::lower(regex, op)` produces a pure regular term `Re` (∅, ε, set, concat, alt,
-repeat, and, not):
+5). `regular::lower(regex, op)` produces a regular term `Re` (∅, ε, set, concat, alt, repeat,
+and, not, and the zero-width `Behind` atom), exact for every zero-width construct (ADR-0008):
 
-- **Full match**: the whole haystack matches. Assertions whose truth is statically known are
-  replaced: `TextStart` where everything before it is zero-width at the haystack start → ε;
-  where something before it must consume → ∅. Symmetrically for the end.
-- **Search**: Σ* r Σ*, with each top-level alternative's leading `TextStart` / `LineStart`
-  and trailing `TextEnd` / `TextEndOrFinalNewline` / `LineEnd` absorbed into the prefix/suffix
-  (e.g. trailing `TextEndOrFinalNewline` becomes the suffix `(ε | \n)`).
+- **Full match** = `node(root, ε)`; **search** = `Σ* · node(root, Σ*)`, where `node(n, k)` is
+  "n followed by the continuation k up to the end of the haystack".
+- Look-ahead `(?=s)` before `k` is `(s·Σ*) ∩ k`; `(?!s)` is `¬(s·Σ*) ∩ k`.
+- Look-behind is `Behind{sub}`: true when the input read so far is in `Σ*·sub`; the derivative
+  engine evaluates it in a (term, context) state.
+- Anchors and boundaries are built from those with each engine's own sets, e.g.
+  `\b` = `(?<=w)(?!w) | (?<!w)(?=w)`, `^` = `(?<![\s\S])`, multi-line `^` = `(?<![^\n])` (per
+  `LineTerms`), Python `$` = `(?=\n?(?![\s\S]))`, Java's `$`/`(?m)^`/Mn-aware `\b` per their source.
+- The analysis **domain** (ADR-0007) restricts JS-without-`u` to BMP haystacks; comparisons use
+  the common domain of both sides.
 
-Any assertion whose truth depends on text the analysis cannot see statically is rejected with
-`Unsupported` and its span (ADR-0004). It is never guessed. Derivatives with look-around context
-(P4) remove this restriction.
+Refused with a span (never guessed): look-ahead inside an unbounded repetition, look-ahead-type
+assertions inside a look-behind, nested look-behind, and the non-regular constructs below.
 
 ## Non-regular features (P4)
 
-Backreferences, look-around and recursion will be added as IR nodes with a `bounded` analysis
-path; results from that path are always labelled with their bound ("checked up to length 12").
+Backreferences, conditionals, atomic groups and possessive quantifiers are already parsed exactly
+into IR nodes; P4 adds their analysis (atomic/possessive where they stay regular, a `bounded`
+path for back-references). Bounded results are always labelled with their bound ("checked up to
+length 12").

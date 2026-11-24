@@ -12,7 +12,7 @@
 use crate::alphabet::Alphabet;
 use crate::automata::{Engine, alphabet_for};
 use crate::budget::Budget;
-use crate::deriv::Store;
+use crate::deriv::{NO_CTX, Store};
 use crate::dfa::Dfa;
 use crate::error::Result;
 use crate::ir::Regex;
@@ -69,8 +69,9 @@ pub fn equivalent(a: &Re, b: &Re, engine: Engine, budget: &Budget) -> Result<Rep
 /// Decides whether two parsed regexes behave the same under `op` (they may be in different
 /// flavours: each was already lowered with its own flavour's semantics).
 pub fn equivalent_regex(a: &Regex, b: &Regex, op: Op, budget: &Budget) -> Result<Report> {
-    let x = lower(a, op, budget)?;
-    let y = lower(b, op, budget)?;
+    let d = crate::regular::common_domain(a, b);
+    let x = crate::regular::restrict(lower(a, op, budget)?, d);
+    let y = crate::regular::restrict(lower(b, op, budget)?, d);
     equivalent(&x, &y, Engine::Derivative, budget)
 }
 
@@ -128,21 +129,32 @@ fn lazy_derivative(a: &Re, b: &Re, alphabet: &Arc<Alphabet>, budget: &Budget) ->
     let mut store = Store::new(alphabet.clone(), budget);
     let x = store.from_re(a, budget)?;
     let y = store.from_re(b, budget)?;
+    // Both sides read the same input, so they share one look-behind context.
+    let ctx0 = store.initial_ctx();
+    let norm = |s: &Store, p: u32, q: u32, ctx: u32| {
+        if s.has_behind(p) || s.has_behind(q) {
+            ctx
+        } else {
+            NO_CTX
+        }
+    };
+    let start = (x, y, norm(&store, x, y, ctx0));
     let store = std::cell::RefCell::new(store);
     let (verdict, n) = bfs(
-        (x, y),
+        start,
         alphabet,
         budget,
-        |(p, q)| {
-            let s = store.borrow();
-            (s.nullable(p), s.nullable(q))
-        },
-        |(p, q), c| {
+        |(p, q, ctx)| {
             let mut s = store.borrow_mut();
-            Ok((
-                s.derive(p, c as u32, budget)?,
-                s.derive(q, c as u32, budget)?,
-            ))
+            (s.nullable(p, ctx), s.nullable(q, ctx))
+        },
+        |(p, q, ctx), c| {
+            let mut s = store.borrow_mut();
+            let dp = s.derive(p, ctx, c as u32, budget)?;
+            let dq = s.derive(q, ctx, c as u32, budget)?;
+            let next = s.step_ctx(ctx, c as u32);
+            let next = norm(&s, dp, dq, next);
+            Ok((dp, dq, next))
         },
     )?;
     Ok(Report {

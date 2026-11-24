@@ -120,6 +120,12 @@ impl Builder<'_> {
                 let d = self.sub_dfa(x)?.complement();
                 self.embed(&d, s, e)?;
             }
+            Re::Behind { .. } => {
+                return Err(crate::error::Error::unsupported(
+                    crate::error::Span::default(),
+                    "the Thompson reference engine has no look-behind; use the derivative engine",
+                ));
+            }
         }
         Ok((s, e))
     }

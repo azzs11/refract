@@ -6,6 +6,12 @@
 //! finitely many derivatives modulo associativity, commutativity and idempotence of `|`, which
 //! this normal form implements, so the lazily explored DFA is finite. Intersection and
 //! complement come for free, which the Thompson engine cannot do directly.
+//!
+//! Look-behind (ADR-0008): a `Behind` atom is zero-width and true when the input read so far
+//! is in `Σ* · sub`. The store keeps one small DFA per distinct `sub` and a *context*: the
+//! current state of each of them. Automaton states are (term, context) pairs; nullability and
+//! derivatives of terms that contain look-behinds are evaluated in a context. Terms without
+//! look-behinds ignore it ([`NO_CTX`]), so ordinary patterns build exactly the DFAs they did.
 
 use crate::alphabet::{Alphabet, BitSet};
 use crate::budget::Budget;
@@ -28,7 +34,12 @@ enum T {
     And(Vec<Id>),
     Not(Id),
     Loop(Id, u32, Option<u32>),
+    /// Look-behind number `.0` (an index into `Store::behinds`), negated when `.1`.
+    Behind(u32, bool),
 }
+
+/// Context id meaning "irrelevant": used for terms without look-behinds.
+pub const NO_CTX: u32 = u32::MAX;
 
 /// An interning store for derivative terms over one alphabet.
 pub struct Store {
@@ -36,8 +47,17 @@ pub struct Store {
     terms: Vec<T>,
     ids: HashMap<T, Id>,
     nullable: Vec<bool>,
-    cache: HashMap<(Id, u32), Id>,
+    /// Per term: does it contain a look-behind (so its meaning depends on the context)?
+    has_behind: Vec<bool>,
+    cache: HashMap<(Id, u32, u32), Id>,
     max_terms: usize,
+    /// One DFA for `Σ* · sub` per distinct look-behind.
+    behinds: Vec<Dfa>,
+    behind_ids: HashMap<Re, u32>,
+    ctxs: Vec<Vec<usize>>,
+    ctx_ids: HashMap<Vec<usize>, u32>,
+    ctx_steps: HashMap<(u32, u32), u32>,
+    null_memo: HashMap<(Id, u32), bool>,
 }
 
 const NOTHING: Id = 0;
@@ -50,8 +70,15 @@ impl Store {
             terms: Vec::new(),
             ids: HashMap::new(),
             nullable: Vec::new(),
+            has_behind: Vec::new(),
             cache: HashMap::new(),
             max_terms: budget.max_terms,
+            behinds: Vec::new(),
+            behind_ids: HashMap::new(),
+            ctxs: Vec::new(),
+            ctx_ids: HashMap::new(),
+            ctx_steps: HashMap::new(),
+            null_memo: HashMap::new(),
         };
         let n = s.intern(T::Nothing);
         let e = s.intern(T::Eps);
@@ -71,8 +98,17 @@ impl Store {
         if let Some(&id) = self.ids.get(&t) {
             return id;
         }
+        let hb = |x: &Id| self.has_behind[*x as usize];
+        let has_behind = match &t {
+            T::Behind(..) => true,
+            T::Nothing | T::Eps | T::Set(_) => false,
+            T::Concat(a, b) => hb(a) || hb(b),
+            T::Alt(xs) | T::And(xs) => xs.iter().any(hb),
+            T::Not(x) | T::Loop(x, _, _) => hb(x),
+        };
+        // Static nullability; meaningless (and never consulted) for terms with look-behinds.
         let nullable = match &t {
-            T::Nothing | T::Set(_) => false,
+            T::Nothing | T::Set(_) | T::Behind(..) => false,
             T::Eps => true,
             T::Concat(a, b) => self.nullable[*a as usize] && self.nullable[*b as usize],
             T::Alt(xs) => xs.iter().any(|&x| self.nullable[x as usize]),
@@ -83,6 +119,7 @@ impl Store {
         let id = self.terms.len() as Id;
         self.terms.push(t.clone());
         self.nullable.push(nullable);
+        self.has_behind.push(has_behind);
         self.ids.insert(t, id);
         id
     }
@@ -92,8 +129,74 @@ impl Store {
         budget.check_time()
     }
 
-    pub fn nullable(&self, id: Id) -> bool {
-        self.nullable[id as usize]
+    /// Does the term's meaning depend on the look-behind context?
+    pub fn has_behind(&self, id: Id) -> bool {
+        self.has_behind[id as usize]
+    }
+
+    /// The starting context (every look-behind DFA at its start). Call after interning all
+    /// terms: look-behinds are registered while interning.
+    pub fn initial_ctx(&mut self) -> u32 {
+        let start: Vec<usize> = self.behinds.iter().map(|d| d.start).collect();
+        self.ctx_id(start)
+    }
+
+    fn ctx_id(&mut self, states: Vec<usize>) -> u32 {
+        if let Some(&id) = self.ctx_ids.get(&states) {
+            return id;
+        }
+        let id = self.ctxs.len() as u32;
+        self.ctxs.push(states.clone());
+        self.ctx_ids.insert(states, id);
+        id
+    }
+
+    /// The context after reading one character of minterm `c`.
+    pub fn step_ctx(&mut self, ctx: u32, c: u32) -> u32 {
+        if ctx == NO_CTX {
+            return NO_CTX;
+        }
+        if let Some(&n) = self.ctx_steps.get(&(ctx, c)) {
+            return n;
+        }
+        let next: Vec<usize> = self.ctxs[ctx as usize]
+            .iter()
+            .zip(&self.behinds)
+            .map(|(&q, d)| d.next(q, c as usize))
+            .collect();
+        let id = self.ctx_id(next);
+        self.ctx_steps.insert((ctx, c), id);
+        id
+    }
+
+    /// The context to pair with `id`: [`NO_CTX`] when the term cannot consult it.
+    pub fn normalize_ctx(&self, id: Id, ctx: u32) -> u32 {
+        if self.has_behind(id) { ctx } else { NO_CTX }
+    }
+
+    /// Nullability of `id` at a position whose look-behind context is `ctx`.
+    pub fn nullable(&mut self, id: Id, ctx: u32) -> bool {
+        if !self.has_behind[id as usize] {
+            return self.nullable[id as usize];
+        }
+        if let Some(&v) = self.null_memo.get(&(id, ctx)) {
+            return v;
+        }
+        let v = match self.terms[id as usize].clone() {
+            T::Behind(i, negated) => {
+                let q = self.ctxs[ctx as usize][i as usize];
+                self.behinds[i as usize].accepting[q] != negated
+            }
+            T::Concat(a, b) => self.nullable(a, ctx) && self.nullable(b, ctx),
+            T::Alt(xs) => xs.iter().any(|&x| self.nullable(x, ctx)),
+            T::And(xs) => xs.iter().all(|&x| self.nullable(x, ctx)),
+            T::Not(x) => !self.nullable(x, ctx),
+            T::Loop(r, min, _) => min == 0 || self.nullable(r, ctx),
+            T::Nothing | T::Set(_) => false,
+            T::Eps => true,
+        };
+        self.null_memo.insert((id, ctx), v);
+        v
     }
 
     /// Σ*, i.e. ¬∅.
@@ -205,8 +308,13 @@ impl Store {
         if min == 1 && max == Some(1) {
             return r;
         }
-        // A nullable body makes the lower bound irrelevant: r{n,m} = r{0,m}.
-        let min = if self.nullable(r) { 0 } else { min };
+        // A nullable body makes the lower bound irrelevant: r{n,m} = r{0,m}. Not for bodies
+        // with look-behinds, whose nullability depends on the position.
+        let min = if !self.has_behind(r) && self.nullable[r as usize] {
+            0
+        } else {
+            min
+        };
         // (r*)* = r*
         if min == 0
             && max.is_none()
@@ -257,17 +365,39 @@ impl Store {
                 let id = self.from_re(r, budget)?;
                 self.repeat(id, *min, *max)
             }
+            Re::Behind { sub, negated } => {
+                if sub.has_behind() {
+                    return Err(crate::error::Error::unsupported(
+                        crate::error::Span::default(),
+                        "look-behind inside a look-behind is not analysed yet",
+                    ));
+                }
+                let idx = match self.behind_ids.get(sub.as_ref()) {
+                    Some(&i) => i,
+                    None => {
+                        let lang = Re::Concat(vec![Re::any_star(), sub.as_ref().clone()]);
+                        let dfa = to_dfa(&lang, &self.alphabet, budget)?;
+                        let i = self.behinds.len() as u32;
+                        self.behinds.push(dfa);
+                        self.behind_ids.insert(sub.as_ref().clone(), i);
+                        i
+                    }
+                };
+                self.intern(T::Behind(idx, *negated))
+            }
         })
     }
 
-    /// The derivative of term `id` with respect to minterm `c`.
-    pub fn derive(&mut self, id: Id, c: u32, budget: &Budget) -> Result<Id> {
-        if let Some(&d) = self.cache.get(&(id, c)) {
+    /// The derivative of term `id` with respect to minterm `c`, at a position whose
+    /// look-behind context is `ctx`.
+    pub fn derive(&mut self, id: Id, ctx: u32, c: u32, budget: &Budget) -> Result<Id> {
+        let ctx = self.normalize_ctx(id, ctx);
+        if let Some(&d) = self.cache.get(&(id, ctx, c)) {
             return Ok(d);
         }
         self.check(budget)?;
         let d = match self.terms[id as usize].clone() {
-            T::Nothing | T::Eps => NOTHING,
+            T::Nothing | T::Eps | T::Behind(..) => NOTHING,
             T::Set(m) => {
                 if m.contains(c as usize) {
                     EPS
@@ -276,10 +406,10 @@ impl Store {
                 }
             }
             T::Concat(a, b) => {
-                let da = self.derive(a, c, budget)?;
+                let da = self.derive(a, ctx, c, budget)?;
                 let left = self.concat(da, b);
-                if self.nullable(a) {
-                    let db = self.derive(b, c, budget)?;
+                if self.nullable(a, ctx) {
+                    let db = self.derive(b, ctx, c, budget)?;
                     self.alt(vec![left, db])
                 } else {
                     left
@@ -288,30 +418,38 @@ impl Store {
             T::Alt(xs) => {
                 let ds = xs
                     .iter()
-                    .map(|&x| self.derive(x, c, budget))
+                    .map(|&x| self.derive(x, ctx, c, budget))
                     .collect::<Result<Vec<_>>>()?;
                 self.alt(ds)
             }
             T::And(xs) => {
                 let ds = xs
                     .iter()
-                    .map(|&x| self.derive(x, c, budget))
+                    .map(|&x| self.derive(x, ctx, c, budget))
                     .collect::<Result<Vec<_>>>()?;
                 self.and(ds)
             }
             T::Not(x) => {
-                let dx = self.derive(x, c, budget)?;
+                let dx = self.derive(x, ctx, c, budget)?;
                 self.not(dx)
             }
             // With the normalisation in `repeat` (min = 0 whenever r is nullable):
-            // d(r{n,m}) = d(r) · r{n-1, m-1}.
+            // d(r{n,m}) = d(r) · r{n-1, m-1}. For a body with look-behinds the normalisation is
+            // not applied, so use the general rule: if r is nullable here and min > 0, the first
+            // copy may be empty, adding d(r{n-1,m-1}).
             T::Loop(r, min, max) => {
-                let dr = self.derive(r, c, budget)?;
+                let dr = self.derive(r, ctx, c, budget)?;
                 let rest = self.repeat(r, min.saturating_sub(1), max.map(|m| m - 1));
-                self.concat(dr, rest)
+                let main = self.concat(dr, rest);
+                if min > 0 && self.has_behind(r) && self.nullable(r, ctx) {
+                    let skip = self.derive(rest, ctx, c, budget)?;
+                    self.alt(vec![main, skip])
+                } else {
+                    main
+                }
             }
         };
-        self.cache.insert((id, c), d);
+        self.cache.insert((id, ctx, c), d);
         Ok(d)
     }
 
@@ -347,6 +485,7 @@ impl Store {
                 self.show(*r),
                 max.map_or(String::new(), |m| m.to_string())
             ),
+            T::Behind(i, negated) => format!("(?<{}#{i})", if *negated { "!" } else { "=" }),
         }
     }
 }
@@ -359,21 +498,25 @@ pub fn to_dfa(re: &Re, alphabet: &Arc<Alphabet>, budget: &Budget) -> Result<Dfa>
     explore(&mut store, root, budget)
 }
 
-/// Explores the derivatives of `root` breadth-first.
+/// Explores the (term, context) states reachable from `root` breadth-first.
 pub fn explore(store: &mut Store, root: Id, budget: &Budget) -> Result<Dfa> {
     let k = store.alphabet.len();
-    let mut state_of: HashMap<Id, usize> = HashMap::new();
-    let mut terms = vec![root];
-    state_of.insert(root, 0);
+    let ctx0 = store.initial_ctx();
+    let start = (root, store.normalize_ctx(root, ctx0));
+    let mut state_of: HashMap<(Id, u32), usize> = HashMap::from([(start, 0)]);
+    let mut states = vec![start];
     let mut queue = VecDeque::from([0usize]);
     let mut delta = Vec::new();
     while let Some(q) = queue.pop_front() {
         debug_assert_eq!(delta.len(), q * k);
+        let (term, ctx) = states[q];
         for c in 0..k {
-            let d = store.derive(terms[q], c as u32, budget)?;
-            let next = terms.len();
-            let t = *state_of.entry(d).or_insert_with(|| {
-                terms.push(d);
+            let d = store.derive(term, ctx, c as u32, budget)?;
+            let next_ctx = store.step_ctx(ctx, c as u32);
+            let key = (d, store.normalize_ctx(d, next_ctx));
+            let next = states.len();
+            let t = *state_of.entry(key).or_insert_with(|| {
+                states.push(key);
                 queue.push_back(next);
                 next
             });
@@ -381,11 +524,14 @@ pub fn explore(store: &mut Store, root: Id, budget: &Budget) -> Result<Dfa> {
         }
         budget.check(
             "DFA states (derivatives)",
-            terms.len(),
+            states.len(),
             budget.max_dfa_states,
         )?;
     }
-    let accepting = terms.iter().map(|&t| store.nullable(t)).collect();
+    let accepting = states
+        .iter()
+        .map(|&(t, ctx)| store.nullable(t, ctx))
+        .collect();
     Ok(Dfa {
         alphabet: store.alphabet.clone(),
         start: 0,

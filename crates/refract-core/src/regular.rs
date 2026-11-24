@@ -13,7 +13,7 @@
 use crate::budget::Budget;
 use crate::charset::CharSet;
 use crate::error::{Error, Result, Span};
-use crate::ir::{Assertion, Node, NodeKind, Regex};
+use crate::ir::{Assertion, Node, NodeKind, Regex, WordSet};
 use std::fmt;
 
 /// A regular term over Unicode scalar values.
@@ -33,6 +33,12 @@ pub enum Re {
     And(Vec<Re>),
     /// Complement relative to all strings.
     Not(Box<Re>),
+    /// Zero-width look-behind: true at a position when the whole input before it is in
+    /// `Σ* · sub` (or is not, when `negated`). `sub` must not contain `Behind` itself.
+    Behind {
+        sub: Box<Re>,
+        negated: bool,
+    },
 }
 
 impl Re {
@@ -53,6 +59,26 @@ impl Re {
         Re::star(Re::Set(CharSet::full()))
     }
 
+    /// True when the term contains a look-behind (only the derivative engine handles those).
+    pub fn has_behind(&self) -> bool {
+        match self {
+            Re::Behind { .. } => true,
+            Re::Nothing | Re::Eps | Re::Set(_) => false,
+            Re::Concat(xs) | Re::Alt(xs) | Re::And(xs) => xs.iter().any(Re::has_behind),
+            Re::Repeat(r, _, _) | Re::Not(r) => r.has_behind(),
+        }
+    }
+
+    /// Number of nodes, for the lowering size budget.
+    pub fn size(&self) -> usize {
+        1 + match self {
+            Re::Nothing | Re::Eps | Re::Set(_) => 0,
+            Re::Concat(xs) | Re::Alt(xs) | Re::And(xs) => xs.iter().map(Re::size).sum(),
+            Re::Repeat(r, _, _) | Re::Not(r) => r.size(),
+            Re::Behind { sub, .. } => sub.size(),
+        }
+    }
+
     /// Every character set mentioned, for building the minterm alphabet.
     pub fn collect_sets(&self, out: &mut Vec<CharSet>) {
         match self {
@@ -62,6 +88,7 @@ impl Re {
                 xs.iter().for_each(|x| x.collect_sets(out));
             }
             Re::Repeat(r, _, _) | Re::Not(r) => r.collect_sets(out),
+            Re::Behind { sub, .. } => sub.collect_sets(out),
         }
     }
 
@@ -110,6 +137,11 @@ impl Re {
             Re::Not(x) => {
                 let e = x.ends_from(chars, i);
                 (i..=n).filter(|j| !e.contains(j)).collect()
+            }
+            Re::Behind { sub, negated } => {
+                // The prefix chars[..i] ends with a match of `sub`.
+                let holds = (0..=i).any(|j| sub.ends_from(&chars[..i], j).contains(&i));
+                if holds != *negated { vec![i] } else { vec![] }
             }
             Re::Repeat(r, min, max) => {
                 let step = |from: &[usize]| {
@@ -172,6 +204,9 @@ impl fmt::Display for Re {
             Re::Alt(xs) => list(f, "alt", xs),
             Re::And(xs) => list(f, "and", xs),
             Re::Not(x) => write!(f, "(not {x})"),
+            Re::Behind { sub, negated } => {
+                write!(f, "({}behind {sub})", if *negated { "not-" } else { "" })
+            }
             Re::Repeat(r, min, max) => {
                 let max = max.map_or(String::new(), |m| m.to_string());
                 write!(f, "(rep{{{min},{max}}} {r})")
@@ -209,292 +244,489 @@ impl std::str::FromStr for Op {
     }
 }
 
-/// Three-valued static knowledge of a position.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum Tri {
-    Yes,
-    No,
-    Unknown,
-}
-
-#[derive(Clone, Copy, Debug)]
-struct Ctx {
-    at_start: Tri,
-    at_end: Tri,
-}
-
-/// Lowers a parsed regex to the language of haystacks accepted by `op`.
+/// Lowers a parsed regex to the language of haystacks accepted by `op` (ADR-0008).
+///
+/// Continuation-passing: `node(n, k)` is the language of "n, then whatever `k` describes, up to
+/// the end of the haystack". That makes every zero-width assertion exact:
+///
+/// - look-ahead `(?=s)` before continuation `k` is `(s·Σ*) ∩ k` (`(?!s)`: `¬(s·Σ*) ∩ k`);
+/// - look-behind is a [`Re::Behind`] atom, evaluated by the derivative engine on the input read
+///   so far;
+/// - `^ $ \A \z \Z \b \B` and multi-line anchors are those two built from character sets
+///   (`\b` = `(?<=w)(?!w) | (?<!w)(?=w)`).
+///
+/// Sub-patterns without look-ahead are lowered directly and simply concatenated with `k`, so the
+/// continuation is only threaded where it is needed.
 pub fn lower(re: &Regex, op: Op, budget: &Budget) -> Result<Re> {
-    match op {
-        Op::FullMatch => lower_node(
-            &re.root,
-            Ctx {
-                at_start: Tri::Yes,
-                at_end: Tri::Yes,
-            },
-            budget,
-        ),
-        Op::Search => lower_search(&re.root, budget),
-    }
-}
-
-/// Search: the haystack contains a match, i.e. Σ* r Σ*, with leading/trailing anchors of each
-/// top-level alternative absorbed into the prefix/suffix.
-fn lower_search(root: &Node, budget: &Budget) -> Result<Re> {
-    let alts: Vec<&Node> = match &unwrap_groups(root).kind {
-        NodeKind::Alt(xs) => xs.iter().collect(),
-        _ => vec![root],
-    };
-    let mut out = Vec::with_capacity(alts.len());
-    for alt in alts {
-        let mut items: Vec<&Node> = match &unwrap_groups(alt).kind {
-            NodeKind::Concat(xs) => xs.iter().collect(),
-            _ => vec![alt],
-        };
-        let mut prefix = Re::any_star();
-        let mut at_start = Tri::Unknown;
-        if let Some(NodeKind::Assert(a)) = items.first().map(|n| &unwrap_groups(n).kind) {
-            match a {
-                Assertion::TextStart => {
-                    prefix = Re::Eps;
-                    at_start = Tri::Yes;
-                    items.remove(0);
-                }
-                Assertion::LineStart { crlf: false } => {
-                    prefix = Re::Alt(vec![
-                        Re::Eps,
-                        Re::Concat(vec![Re::any_star(), Re::lit('\n')]),
-                    ]);
-                    items.remove(0);
-                }
-                _ => {}
-            }
-        }
-        let mut suffix = Re::any_star();
-        let mut at_end = Tri::Unknown;
-        if let Some(NodeKind::Assert(a)) = items.last().map(|n| &unwrap_groups(n).kind) {
-            match a {
-                Assertion::TextEnd => {
-                    suffix = Re::Eps;
-                    at_end = Tri::Yes;
-                    items.pop();
-                }
-                Assertion::TextEndOrFinalNewline => {
-                    suffix = Re::Alt(vec![Re::Eps, Re::lit('\n')]);
-                    items.pop();
-                }
-                Assertion::LineEnd { crlf: false } => {
-                    suffix = Re::Alt(vec![
-                        Re::Eps,
-                        Re::Concat(vec![Re::lit('\n'), Re::any_star()]),
-                    ]);
-                    items.pop();
-                }
-                _ => {}
-            }
-        }
-        let ctx = Ctx { at_start, at_end };
-        let core = lower_seq(&items, ctx, budget)?;
-        out.push(Re::Concat(vec![prefix, core, suffix]));
-    }
-    Ok(if out.len() == 1 {
-        out.pop().unwrap_or(Re::Nothing)
-    } else {
-        Re::Alt(out)
-    })
-}
-
-fn unwrap_groups(mut n: &Node) -> &Node {
-    while let NodeKind::Group(g) = &n.kind {
-        n = &g.sub;
-    }
-    n
-}
-
-fn lower_node(node: &Node, ctx: Ctx, budget: &Budget) -> Result<Re> {
-    Ok(match &node.kind {
-        NodeKind::Empty => Re::Eps,
-        NodeKind::Literal(c) => Re::lit(*c),
-        NodeKind::Class(s) => Re::Set(s.clone()),
-        NodeKind::Group(g) if g.atomic => {
-            return Err(Error::unsupported(
-                node.span,
-                "atomic groups change what matches; they are analysed from phase P4",
-            ));
-        }
-        NodeKind::Group(g) => lower_node(&g.sub, ctx, budget)?,
-        NodeKind::Look(_) => {
-            return Err(Error::unsupported(
-                node.span,
-                "look-around is analysed from phase P4",
-            ));
-        }
-        NodeKind::Backref(_) => {
-            return Err(Error::unsupported(
-                node.span,
-                "backreferences are not regular; bounded analysis arrives in phase P4",
-            ));
-        }
-        NodeKind::Conditional(_) => {
-            return Err(Error::unsupported(
-                node.span,
-                "conditional groups are analysed from phase P4",
-            ));
-        }
-        NodeKind::Repeat(r) if r.possessive => {
-            return Err(Error::unsupported(
-                node.span,
-                "possessive quantifiers change what matches; they are analysed from phase P4",
-            ));
-        }
-        NodeKind::Alt(xs) => Re::Alt(
-            xs.iter()
-                .map(|x| lower_node(x, ctx, budget))
-                .collect::<Result<_>>()?,
-        ),
-        NodeKind::Concat(xs) => {
-            let items: Vec<&Node> = xs.iter().collect();
-            lower_seq(&items, ctx, budget)?
-        }
-        NodeKind::Repeat(r) => {
-            for n in [Some(r.min), r.max].into_iter().flatten() {
-                if n > budget.max_repeat {
-                    return Err(Error::budget(format!(
-                        "counted repetition {{{n}}} at {} exceeds the limit of {}",
-                        node.span, budget.max_repeat
-                    )));
-                }
-            }
-            let sub_ctx = if r.max.is_some_and(|m| m <= 1) {
-                ctx
+    let lw = Lowerer { budget };
+    let lang = match op {
+        Op::FullMatch => lw.node(&re.root, Re::Eps)?,
+        Op::Search => {
+            let normal = Re::Concat(vec![Re::any_star(), lw.node(&re.root, Re::any_star())?]);
+            if re.quirks.v8_mid_surrogate_search && matches_empty_mid_pair(&re.root)? {
+                // Any haystack with an astral char offers such a position.
+                let astral = Re::Set(CharSet::from_ranges([(0x1_0000, crate::charset::MAX_CHAR)]));
+                Re::Alt(vec![
+                    normal,
+                    Re::Concat(vec![Re::any_star(), astral, Re::any_star()]),
+                ])
             } else {
-                // Later iterations sit elsewhere: only "No" survives repetition.
-                Ctx {
-                    at_start: if ctx.at_start == Tri::No {
-                        Tri::No
-                    } else {
-                        Tri::Unknown
-                    },
-                    at_end: if ctx.at_end == Tri::No {
-                        Tri::No
-                    } else {
-                        Tri::Unknown
-                    },
-                }
-            };
-            Re::Repeat(Box::new(lower_node(&r.sub, sub_ctx, budget)?), r.min, r.max)
+                normal
+            }
         }
-        NodeKind::Assert(a) => lower_assertion(*a, node.span, ctx)?,
-    })
-}
-
-/// Lowers a sequence, computing for each item whether it certainly starts at the haystack start
-/// (all previous items are zero-width) or certainly does not (some previous item consumes).
-fn lower_seq(items: &[&Node], ctx: Ctx, budget: &Budget) -> Result<Re> {
-    let lens: Vec<(usize, Option<usize>)> = items.iter().map(|n| width(n)).collect();
-    let mut out = Vec::with_capacity(items.len());
-    for (i, item) in items.iter().enumerate() {
-        let before = &lens[..i];
-        let after = &lens[i + 1..];
-        let at_start = position(ctx.at_start, before);
-        let at_end = position(ctx.at_end, after);
-        out.push(lower_node(item, Ctx { at_start, at_end }, budget)?);
-    }
-    Ok(match out.len() {
-        0 => Re::Eps,
-        1 => out.pop().unwrap_or(Re::Eps),
-        _ => Re::Concat(out),
-    })
-}
-
-fn position(edge: Tri, others: &[(usize, Option<usize>)]) -> Tri {
-    if others.iter().any(|&(min, _)| min > 0) {
-        Tri::No
-    } else if edge == Tri::Yes && others.iter().all(|&(_, max)| max == Some(0)) {
-        Tri::Yes
-    } else if edge == Tri::No {
-        Tri::No
-    } else {
-        Tri::Unknown
-    }
-}
-
-/// (minimum, maximum) number of characters a node can consume; `None` = unbounded.
-fn width(n: &Node) -> (usize, Option<usize>) {
-    match &n.kind {
-        NodeKind::Empty | NodeKind::Assert(_) => (0, Some(0)),
-        NodeKind::Literal(_) => (1, Some(1)),
-        NodeKind::Class(s) if s.is_empty() => (1, Some(0)), // never matches; treat as consuming
-        NodeKind::Class(_) => (1, Some(1)),
-        NodeKind::Group(g) => width(&g.sub),
-        NodeKind::Look(_) => (0, Some(0)),
-        // Unknown statically: the referenced group can match anything.
-        NodeKind::Backref(_) => (0, None),
-        NodeKind::Conditional(c) => {
-            let y = width(&c.yes);
-            let n = c.no.as_ref().map_or((0, Some(0)), |n| width(n));
-            (y.0.min(n.0), y.1.zip(n.1).map(|(a, b)| a.max(b)))
-        }
-        NodeKind::Concat(xs) => xs.iter().fold((0, Some(0)), |(a, b), x| {
-            let (c, d) = width(x);
-            (
-                a.saturating_add(c),
-                b.zip(d).map(|(b, d)| b.saturating_add(d)),
-            )
-        }),
-        NodeKind::Alt(xs) => {
-            let ws: Vec<_> = xs.iter().map(width).collect();
-            let min = ws.iter().map(|w| w.0).min().unwrap_or(0);
-            let max = ws.iter().try_fold(0usize, |acc, w| w.1.map(|m| acc.max(m)));
-            (min, max)
-        }
-        NodeKind::Repeat(r) => {
-            let (a, b) = width(&r.sub);
-            let min = a.saturating_mul(r.min as usize);
-            let max = match (b, r.max) {
-                (Some(0), _) => Some(0),
-                (Some(b), Some(m)) => Some(b.saturating_mul(m as usize)),
-                _ => None,
-            };
-            (min, max)
-        }
-    }
-}
-
-fn lower_assertion(a: Assertion, span: Span, ctx: Ctx) -> Result<Re> {
-    let unknown = |what: &str| {
-        Err(Error::unsupported(
-            span,
-            format!(
-                "{what} here depends on the surrounding text; assertions inside the pattern \
-                 are analysed from phase P4 (only leading/trailing anchors are handled now)"
-            ),
-        ))
     };
-    match a {
-        Assertion::TextStart => match ctx.at_start {
-            Tri::Yes => Ok(Re::Eps),
-            Tri::No => Ok(Re::Nothing),
-            Tri::Unknown => unknown("start-of-text anchor"),
-        },
-        Assertion::TextEnd => match ctx.at_end {
-            Tri::Yes => Ok(Re::Eps),
-            Tri::No => Ok(Re::Nothing),
-            Tri::Unknown => unknown("end-of-text anchor"),
-        },
-        Assertion::TextEndOrFinalNewline => match ctx.at_end {
-            Tri::Yes => Ok(Re::Eps),
-            _ => unknown("end-or-final-newline anchor"),
-        },
-        Assertion::LineStart { .. } => match ctx.at_start {
-            Tri::Yes => Ok(Re::Eps),
-            _ => unknown("start-of-line anchor"),
-        },
-        Assertion::LineEnd { .. } => match ctx.at_end {
-            Tri::Yes => Ok(Re::Eps),
-            _ => unknown("end-of-line anchor"),
-        },
-        _ => unknown("word-boundary assertion"),
+    let size = lang.size();
+    if size > MAX_LOWERED_SIZE {
+        return Err(Error::budget(format!(
+            "lowered term has {size} nodes, over the limit of {MAX_LOWERED_SIZE} (many look-aheads \
+             after alternations); split the regex"
+        )));
+    }
+    Ok(match re.domain {
+        crate::ir::Domain::Scalars => lang,
+        crate::ir::Domain::Bmp => Re::And(vec![
+            lang,
+            Re::star(Re::Set(CharSet::from_ranges([(0, 0xFFFF)]))),
+        ]),
+    })
+}
+
+/// Java's `\b` (Pattern.Bound): a side is "word" when its char is an ASCII word char, or a
+/// non-spacing mark whose run of marks follows a Unicode letter or digit (`hasBaseCharacter`).
+fn java_word_boundary(boundary: bool, k: Re) -> Re {
+    let (mn, ld) = crate::tables::java_marks();
+    let w = Re::Set(crate::unicode::posix_class("word").unwrap_or_default());
+    let mn = Re::Set(mn.clone());
+    let ld = Re::Set(ld.clone());
+    // Left char is word: prefix ends in W, or in LD·Mn+.
+    let left_word = Re::Alt(vec![
+        w.clone(),
+        Re::Concat(vec![ld.clone(), Re::Repeat(Box::new(mn.clone()), 1, None)]),
+    ]);
+    let lw = behind(left_word.clone(), false);
+    let not_lw = behind(left_word, true);
+    // Right char is word: next is W, or next is Mn and the prefix ends in LD·Mn*.
+    let base = Re::Concat(vec![ld, Re::star(mn.clone())]);
+    let rw = |k: Re| {
+        Re::Alt(vec![
+            and(starts_with(w.clone()), k.clone()),
+            cat(behind(base.clone(), false), and(starts_with(mn.clone()), k)),
+        ])
+    };
+    let not_rw = |k: Re| {
+        let not_w = Re::Not(Box::new(starts_with(w.clone())));
+        Re::Alt(vec![
+            and(
+                Re::And(vec![
+                    not_w.clone(),
+                    Re::Not(Box::new(starts_with(mn.clone()))),
+                ]),
+                k.clone(),
+            ),
+            cat(behind(base.clone(), true), and(not_w, k)),
+        ])
+    };
+    if boundary {
+        Re::Alt(vec![cat(lw, not_rw(k.clone())), cat(not_lw, rw(k))])
+    } else {
+        Re::Alt(vec![cat(lw, rw(k.clone())), cat(not_lw, not_rw(k))])
+    }
+}
+
+/// Can the pattern match the empty string at a V8 mid-surrogate-pair position (see
+/// [`crate::ir::Quirks`])? There no character is visible on either side and the text-edge
+/// anchors are false, so only empty matches are possible.
+fn matches_empty_mid_pair(n: &Node) -> Result<bool> {
+    Ok(match &n.kind {
+        NodeKind::Empty => true,
+        NodeKind::Literal(_) | NodeKind::Class(_) => false,
+        NodeKind::Concat(xs) => {
+            for x in xs {
+                if !matches_empty_mid_pair(x)? {
+                    return Ok(false);
+                }
+            }
+            true
+        }
+        NodeKind::Alt(xs) => {
+            for x in xs {
+                if matches_empty_mid_pair(x)? {
+                    return Ok(true);
+                }
+            }
+            false
+        }
+        NodeKind::Group(g) => matches_empty_mid_pair(&g.sub)?,
+        NodeKind::Repeat(r) => r.min == 0 || matches_empty_mid_pair(&r.sub)?,
+        NodeKind::Look(l) => matches_empty_mid_pair(&l.sub)? != l.negated,
+        NodeKind::Assert(a) => matches!(a, Assertion::NotWordBoundary { .. }),
+        NodeKind::Backref(_) | NodeKind::Conditional(_) => {
+            return Err(Error::unsupported(n.span, "construct not analysed yet"));
+        }
+    })
+}
+
+/// Restricts a lowered language to a domain. Two verdicts are only comparable over a common
+/// domain: comparing JS-without-`u` (BMP haystacks) with another engine restricts both sides to
+/// BMP strings, so a witness is meaningful for both (ADR-0007).
+pub fn restrict(re: Re, domain: crate::ir::Domain) -> Re {
+    match domain {
+        crate::ir::Domain::Scalars => re,
+        crate::ir::Domain::Bmp => Re::And(vec![
+            re,
+            Re::star(Re::Set(CharSet::from_ranges([(0, 0xFFFF)]))),
+        ]),
+    }
+}
+
+/// The common domain of two regexes.
+pub fn common_domain(a: &Regex, b: &Regex) -> crate::ir::Domain {
+    use crate::ir::Domain;
+    if a.domain == Domain::Bmp || b.domain == Domain::Bmp {
+        Domain::Bmp
+    } else {
+        Domain::Scalars
+    }
+}
+
+/// Continuation threading copies `k` into every alternative that contains a look-ahead; this
+/// bounds the result.
+const MAX_LOWERED_SIZE: usize = 200_000;
+/// Bounded repetitions containing a look-ahead are unrolled up to this many copies.
+const MAX_CPS_UNROLL: u32 = 16;
+
+struct Lowerer<'a> {
+    budget: &'a Budget,
+}
+
+fn any() -> Re {
+    Re::Set(CharSet::full())
+}
+
+fn behind(sub: Re, negated: bool) -> Re {
+    Re::Behind {
+        sub: Box::new(sub),
+        negated,
+    }
+}
+
+/// `s · Σ*`: "the rest of the input starts with s".
+fn starts_with(s: Re) -> Re {
+    Re::Concat(vec![s, Re::any_star()])
+}
+
+fn and(a: Re, k: Re) -> Re {
+    Re::And(vec![a, k])
+}
+
+fn cat(a: Re, k: Re) -> Re {
+    match k {
+        Re::Eps => a,
+        k => Re::Concat(vec![a, k]),
+    }
+}
+
+/// Does the node contain anything that looks to the right of the current position?
+fn needs_continuation(n: &Node) -> bool {
+    let mut found = false;
+    n.walk(&mut |m| {
+        found |= match &m.kind {
+            NodeKind::Look(l) => !l.behind,
+            NodeKind::Assert(a) => !matches!(
+                a,
+                Assertion::TextStart
+                    | Assertion::WordStartHalf { .. }
+                    | Assertion::LineStart {
+                        terms: crate::ir::LineTerms::Lf | crate::ir::LineTerms::Js
+                    }
+            ),
+            _ => false,
+        }
+    });
+    found
+}
+
+impl Lowerer<'_> {
+    fn unsupported(span: Span, what: &str) -> Error {
+        Error::unsupported(span, what.to_string())
+    }
+
+    /// `n` followed by `k`.
+    fn node(&self, n: &Node, k: Re) -> Result<Re> {
+        self.budget.check_time()?;
+        if !needs_continuation(n) {
+            return Ok(cat(self.local(n)?, k));
+        }
+        Ok(match &n.kind {
+            NodeKind::Concat(xs) => {
+                let mut acc = k;
+                for x in xs.iter().rev() {
+                    acc = self.node(x, acc)?;
+                }
+                acc
+            }
+            NodeKind::Alt(xs) => Re::Alt(
+                xs.iter()
+                    .map(|x| self.node(x, k.clone()))
+                    .collect::<Result<_>>()?,
+            ),
+            NodeKind::Group(g) if g.atomic => {
+                return Err(Self::unsupported(
+                    n.span,
+                    "atomic groups are analysed from phase P4",
+                ));
+            }
+            NodeKind::Group(g) => self.node(&g.sub, k)?,
+            NodeKind::Repeat(r) if r.possessive => {
+                return Err(Self::unsupported(
+                    n.span,
+                    "possessive quantifiers are analysed from phase P4",
+                ));
+            }
+            NodeKind::Repeat(r) => {
+                let Some(max) = r.max.filter(|&m| m <= MAX_CPS_UNROLL) else {
+                    return Err(Self::unsupported(
+                        n.span,
+                        "a look-ahead inside an unbounded (or very large) repetition is not \
+                         analysed yet",
+                    ));
+                };
+                // Optional copies first (innermost), then the mandatory ones.
+                let mut acc = k.clone();
+                for _ in r.min..max {
+                    acc = Re::Alt(vec![k.clone(), self.node(&r.sub, acc)?]);
+                }
+                for _ in 0..r.min {
+                    acc = self.node(&r.sub, acc)?;
+                }
+                acc
+            }
+            NodeKind::Look(l) if l.behind => {
+                // Reaches here only because its body needs a continuation.
+                return Err(Self::unsupported(
+                    n.span,
+                    "a look-ahead (or \\b, $) inside a look-behind is not analysed yet",
+                ));
+            }
+            NodeKind::Look(l) => {
+                let inner = self.node(&l.sub, Re::any_star())?;
+                and(
+                    if l.negated {
+                        Re::Not(Box::new(inner))
+                    } else {
+                        inner
+                    },
+                    k,
+                )
+            }
+            NodeKind::Assert(a) => self.assertion(*a, k),
+            _ => return Err(Self::unsupported(n.span, "construct not analysed yet")),
+        })
+    }
+
+    /// A node with no look-ahead inside: its own language.
+    fn local(&self, n: &Node) -> Result<Re> {
+        Ok(match &n.kind {
+            NodeKind::Empty => Re::Eps,
+            NodeKind::Literal(c) => Re::lit(*c),
+            NodeKind::Class(s) => Re::Set(s.clone()),
+            NodeKind::Concat(xs) => {
+                Re::Concat(xs.iter().map(|x| self.local(x)).collect::<Result<_>>()?)
+            }
+            NodeKind::Alt(xs) => Re::Alt(xs.iter().map(|x| self.local(x)).collect::<Result<_>>()?),
+            NodeKind::Group(g) if g.atomic => {
+                return Err(Self::unsupported(
+                    n.span,
+                    "atomic groups change what matches; they are analysed from phase P4",
+                ));
+            }
+            NodeKind::Group(g) => self.local(&g.sub)?,
+            NodeKind::Repeat(r) if r.possessive => {
+                return Err(Self::unsupported(
+                    n.span,
+                    "possessive quantifiers change what matches; they are analysed from phase P4",
+                ));
+            }
+            NodeKind::Repeat(r) => {
+                for c in [Some(r.min), r.max].into_iter().flatten() {
+                    if c > self.budget.max_repeat {
+                        return Err(Error::budget(format!(
+                            "counted repetition {{{c}}} at {} exceeds the limit of {}",
+                            n.span, self.budget.max_repeat
+                        )));
+                    }
+                }
+                Re::Repeat(Box::new(self.local(&r.sub)?), r.min, r.max)
+            }
+            NodeKind::Look(l) => {
+                // Only look-behind reaches here (look-ahead needs the continuation).
+                if needs_continuation(&l.sub) {
+                    return Err(Self::unsupported(
+                        n.span,
+                        "a look-ahead inside a look-behind is not analysed yet",
+                    ));
+                }
+                let body = self.local(&l.sub)?;
+                let body = if l.window_empty {
+                    Re::Nothing
+                } else if let Some((min, max)) = l.window {
+                    Re::And(vec![body, Re::Repeat(Box::new(any()), min, max)])
+                } else {
+                    body
+                };
+                behind(body, l.negated)
+            }
+            NodeKind::Assert(a) => match a {
+                // (?<![\s\S]): nothing before.
+                Assertion::TextStart => behind(any(), true),
+                // (?<![^\n]) (resp. JS LineTerminators): start, or after a terminator.
+                Assertion::LineStart { terms } => {
+                    let t: CharSet = terms.chars().unwrap_or_default().iter().copied().collect();
+                    behind(Re::Set(t.complement()), true)
+                }
+                Assertion::WordStartHalf { word } => behind(Re::Set(word.chars()), true),
+                other => {
+                    return Err(Self::unsupported(
+                        n.span,
+                        &format!("internal: {other:?} needs a continuation"),
+                    ));
+                }
+            },
+            NodeKind::Backref(_) => {
+                return Err(Self::unsupported(
+                    n.span,
+                    "backreferences are not regular; bounded analysis arrives in phase P4",
+                ));
+            }
+            NodeKind::Conditional(_) => {
+                return Err(Self::unsupported(
+                    n.span,
+                    "conditional groups are analysed from phase P4",
+                ));
+            }
+        })
+    }
+
+    /// An assertion that looks right, before continuation `k`.
+    fn assertion(&self, a: Assertion, k: Re) -> Re {
+        use crate::ir::LineTerms;
+        let nl = Re::lit('\n');
+        let cr = Re::lit('\r');
+        match a {
+            Assertion::TextEnd => and(Re::Eps, k),
+            Assertion::TextEndOrFinalNewline => and(Re::Alt(vec![Re::Eps, nl]), k),
+            Assertion::LineEnd {
+                terms: terms @ (LineTerms::Lf | LineTerms::Js),
+            } => {
+                let t: CharSet = terms.chars().unwrap_or_default().iter().copied().collect();
+                and(Re::Alt(vec![Re::Eps, starts_with(Re::Set(t))]), k)
+            }
+            // Before \r or \n or at the end, but never between \r and \n.
+            Assertion::LineEnd {
+                terms: LineTerms::CrLf,
+            } => Re::Alt(vec![
+                and(Re::Eps, k.clone()),
+                and(starts_with(cr.clone()), k.clone()),
+                cat(behind(cr, true), and(starts_with(nl), k)),
+            ]),
+            // At the start, after \n, or after \r unless \n follows.
+            Assertion::LineStart {
+                terms: LineTerms::CrLf,
+            } => Re::Alt(vec![
+                cat(behind(any(), true), k.clone()),
+                cat(behind(nl.clone(), false), k.clone()),
+                cat(
+                    behind(cr, false),
+                    and(Re::Not(Box::new(starts_with(nl))), k),
+                ),
+            ]),
+            Assertion::TextStart
+            | Assertion::LineStart { .. }
+            | Assertion::WordStartHalf { .. } => {
+                // Look-behind only; handled by `local`, kept total here.
+                let local = match a {
+                    Assertion::TextStart => behind(any(), true),
+                    Assertion::WordStartHalf { word } => behind(Re::Set(word.chars()), true),
+                    Assertion::LineStart { terms } => {
+                        let t: CharSet =
+                            terms.chars().unwrap_or_default().iter().copied().collect();
+                        behind(Re::Set(t.complement()), true)
+                    }
+                    _ => Re::Eps,
+                };
+                cat(local, k)
+            }
+            Assertion::JavaDollar { unix: true } => and(Re::Alt(vec![Re::Eps, nl]), k),
+            Assertion::JavaDollar { unix: false } => {
+                let single = Re::Set(CharSet::from_iter(['\r', '\u{85}', '\u{2028}', '\u{2029}']));
+                Re::Alt(vec![
+                    and(
+                        Re::Alt(vec![Re::Eps, Re::string("\r\n"), single]),
+                        k.clone(),
+                    ),
+                    cat(behind(cr, true), and(nl, k)),
+                ])
+            }
+            Assertion::JavaLineEnd { unix: true } => {
+                and(Re::Alt(vec![Re::Eps, starts_with(nl)]), k)
+            }
+            Assertion::JavaLineEnd { unix: false } => {
+                let single = Re::Set(CharSet::from_iter(['\r', '\u{85}', '\u{2028}', '\u{2029}']));
+                Re::Alt(vec![
+                    and(Re::Alt(vec![Re::Eps, starts_with(single)]), k.clone()),
+                    cat(behind(cr, true), and(starts_with(nl), k)),
+                ])
+            }
+            Assertion::JavaLineStart { unix } => {
+                let nonempty = starts_with(any());
+                let mut alts = vec![cat(behind(any(), true), and(nonempty.clone(), k.clone()))];
+                if unix {
+                    alts.push(cat(behind(nl, false), and(nonempty, k)));
+                } else {
+                    let other =
+                        Re::Set(CharSet::from_iter(['\n', '\u{85}', '\u{2028}', '\u{2029}']));
+                    alts.push(cat(behind(other, false), and(nonempty.clone(), k.clone())));
+                    alts.push(cat(
+                        behind(cr, false),
+                        and(
+                            Re::And(vec![nonempty, Re::Not(Box::new(starts_with(nl)))]),
+                            k,
+                        ),
+                    ));
+                }
+                Re::Alt(alts)
+            }
+            Assertion::WordBoundary {
+                word: WordSet::Java,
+            }
+            | Assertion::NotWordBoundary {
+                word: WordSet::Java,
+            } => java_word_boundary(matches!(a, Assertion::WordBoundary { .. }), k),
+            Assertion::WordBoundary { word }
+            | Assertion::NotWordBoundary { word }
+            | Assertion::WordStart { word }
+            | Assertion::WordEnd { word }
+            | Assertion::WordEndHalf { word } => {
+                let w = Re::Set(word.chars());
+                let ahead = starts_with(w.clone());
+                let not_ahead = Re::Not(Box::new(ahead.clone()));
+                let after_word = |r: Re| cat(behind(w.clone(), false), r);
+                let after_non = |r: Re| cat(behind(w.clone(), true), r);
+                match a {
+                    Assertion::WordBoundary { .. } => Re::Alt(vec![
+                        after_word(and(not_ahead, k.clone())),
+                        after_non(and(ahead, k)),
+                    ]),
+                    Assertion::NotWordBoundary { .. } => Re::Alt(vec![
+                        after_word(and(ahead, k.clone())),
+                        after_non(and(not_ahead, k)),
+                    ]),
+                    Assertion::WordStart { .. } => after_non(and(ahead, k)),
+                    Assertion::WordEnd { .. } => after_word(and(not_ahead, k)),
+                    _ => and(not_ahead, k),
+                }
+            }
+        }
     }
 }
 
@@ -507,22 +739,45 @@ mod tests {
         lower(&parse(Flavor::Rust, p).unwrap(), op, &Budget::default())
     }
 
+    /// Assertions anywhere, checked against hand-computed membership.
     #[test]
-    fn edge_anchors() {
-        assert_eq!(
-            low("^a$", Op::FullMatch).unwrap().to_string(),
-            "(cat ε [a] ε)"
-        );
-        assert_eq!(
-            low("a^b", Op::FullMatch).unwrap().to_string(),
-            "(cat [a] ∅ [b])"
-        );
-        assert_eq!(
-            low("^a", Op::Search).unwrap().to_string(),
-            "(cat ε [a] (rep{0,} [ANY]))"
-        );
-        assert!(low("(^a)*", Op::FullMatch).is_err());
-        assert!(low(r"\ba", Op::FullMatch).is_err());
+    fn assertions_anywhere() {
+        type Case<'a> = (&'a str, Op, &'a [(&'a str, bool)]);
+        let cases: &[Case] = &[
+            ("^a$", Op::FullMatch, &[("a", true), ("aa", false)]),
+            ("a^b", Op::FullMatch, &[("ab", false)]),
+            ("^a", Op::Search, &[("ab", true), ("ba", false)]),
+            (
+                "(^a)*",
+                Op::FullMatch,
+                &[("", true), ("a", true), ("aa", false)],
+            ),
+            (
+                r"\ba",
+                Op::Search,
+                &[("a", true), ("ba", false), (" a", true)],
+            ),
+            (r"a\b", Op::FullMatch, &[("a", true)]),
+            (r"\Bb", Op::Search, &[("ab", true), ("b", false)]),
+            ("(?m)^b", Op::Search, &[("a\nb", true), ("ab", false)]),
+            ("(?m)a$", Op::Search, &[("a\nb", true), ("ab", false)]),
+            (
+                "a$|b",
+                Op::Search,
+                &[("xa", true), ("ax", false), ("bx", true)],
+            ),
+        ];
+        for (p, op, inputs) in cases {
+            let re = low(p, *op).unwrap();
+            let alpha = crate::automata::alphabet_for(&[&re]);
+            let m =
+                crate::automata::dfa(&re, &alpha, crate::Engine::Derivative, &Budget::default())
+                    .unwrap();
+            for (s, want) in *inputs {
+                assert_eq!(m.accepts(s), *want, "{p} {op:?} on {s:?}");
+                assert_eq!(re.matches_naive(s), *want, "naive: {p} {op:?} on {s:?}");
+            }
+        }
     }
 
     #[test]
