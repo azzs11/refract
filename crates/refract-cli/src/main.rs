@@ -4,7 +4,7 @@
 
 use anyhow::Result;
 use clap::{Parser, Subcommand};
-use refract_core::Flavor;
+use refract_core::{Engine, Flavor, Op};
 use std::process::ExitCode;
 
 mod commands;
@@ -15,7 +15,7 @@ mod commands;
     version,
     about = "Same pattern, different meaning: see exactly where.",
     long_about = "Refract parses regexes from several engines' flavours into one formal model, \
-                  starting with an exact, span-preserving parser."
+                  and builds minimal automata for it."
 )]
 struct Cli {
     #[command(subcommand)]
@@ -35,6 +35,21 @@ enum Command {
         /// Emit JSON.
         #[arg(long)]
         json: bool,
+        pattern: String,
+    },
+    /// Build the minimal DFA of a pattern.
+    Dfa {
+        #[arg(long, short = 'f', default_value = "rust")]
+        flavor: Flavor,
+        #[arg(long, default_value = "full")]
+        op: Op,
+        #[arg(long, default_value = "deriv")]
+        engine: Engine,
+        /// Print Graphviz DOT.
+        #[arg(long)]
+        dot: bool,
+        #[arg(long)]
+        max_states: Option<usize>,
         pattern: String,
     },
     /// List flavours and their semantics profiles.
@@ -60,6 +75,14 @@ fn run(cli: Cli) -> Result<ExitCode> {
             json,
             pattern,
         } => commands::parse(flavor, &pattern, compact, json),
+        Command::Dfa {
+            flavor,
+            op,
+            engine,
+            dot,
+            max_states,
+            pattern,
+        } => commands::dfa(flavor, &pattern, op, engine, dot, max_states),
         Command::Flavors => commands::flavors(),
     }
 }
