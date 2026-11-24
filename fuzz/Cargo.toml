@@ -1,0 +1,22 @@
+[package]
+name = "refract-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2024"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+refract-core = { path = "../crates/refract-core" }
+
+# Kept out of the main workspace: cargo-fuzz needs nightly.
+[workspace]
+
+[[bin]]
+name = "parse_rust"
+path = "fuzz_targets/parse_rust.rs"
+test = false
+doc = false
+bench = false
