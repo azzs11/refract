@@ -492,6 +492,16 @@ impl<'a> Parser<'a> {
         }
     }
 
+    fn backref_case(&self) -> crate::ir::BackrefCase {
+        if self.flags.i {
+            crate::ir::BackrefCase::Python {
+                ascii: self.flags.ascii,
+            }
+        } else {
+            crate::ir::BackrefCase::Exact
+        }
+    }
+
     fn fold(&self, set: CharSet) -> CharSet {
         if !self.flags.i {
             set
@@ -633,7 +643,10 @@ impl<'a> Parser<'a> {
                 if !self.closed[group as usize - 1] {
                     return Err(Error::syntax(span(self), "cannot refer to an open group"));
                 }
-                return Ok((Node::new(NodeKind::Backref(group), span(self)), Last::Other));
+                return Ok((
+                    Node::new(NodeKind::Backref(group, self.backref_case()), span(self)),
+                    Last::Other,
+                ));
             }
             return Err(Error::syntax(
                 span(self),
@@ -778,7 +791,7 @@ impl<'a> Parser<'a> {
                             ));
                         }
                         return Ok(Some(Node::new(
-                            NodeKind::Backref(gid),
+                            NodeKind::Backref(gid, self.backref_case()),
                             self.span_from(start),
                         )));
                     } else {

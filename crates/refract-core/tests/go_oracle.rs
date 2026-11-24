@@ -167,6 +167,9 @@ proptest! {
         let budget = Budget::small().start();
         let hay_refs: Vec<&str> = hay.iter().map(String::as_str).collect();
         for (op, oop) in [(Op::FullMatch, OOp::Full), (Op::Search, OOp::Search)] {
+            // The interpreter (ADR-0011) must agree with the engine on every pattern, including
+            // the non-regular ones the automata refuse.
+            interp_check(&ir, op, oop, &hay)?;
             let Ok(re) = lower(&ir, op, &budget) else { continue };
             let alpha = alphabet_for(&[&re]);
             let Ok(m) = dfa(&re, &alpha, Engine::Derivative, &budget) else { continue };
@@ -280,4 +283,43 @@ fn known_cases() {
         failures.len(),
         failures.join("\n")
     );
+}
+
+/// The interpreter's verdicts versus the real engine on the same haystacks.
+fn interp_check(
+    ir: &refract_core::Regex,
+    op: Op,
+    oop: OOp,
+    hay: &[String],
+) -> Result<(), TestCaseError> {
+    let mut mine = Vec::new();
+    for h in hay {
+        match refract_core::interp::is_match(ir, op, h, 200_000) {
+            Ok(b) => mine.push(Some(b)),
+            Err(_) => mine.push(None), // step limit: no prediction
+        }
+    }
+    let refs: Vec<&str> = hay.iter().map(String::as_str).collect();
+    let Some(out) = with_go(|go| go.run(&ir.pattern, oop, &refs)) else {
+        return Ok(());
+    };
+    let Outcome::Matched(real) = out.map_err(|e| TestCaseError::fail(e.to_string()))? else {
+        return Err(TestCaseError::fail(format!(
+            "we parsed {:?} but the engine rejects it",
+            ir.pattern
+        )));
+    };
+    for ((h, want), got) in hay.iter().zip(real).zip(mine) {
+        if let Some(got) = got {
+            prop_assert_eq!(
+                got,
+                want,
+                "interpreter {} of {:?} on {} vs engine",
+                op.name(),
+                ir.pattern,
+                escape(h)
+            );
+        }
+    }
+    Ok(())
 }

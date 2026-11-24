@@ -5,7 +5,7 @@
 //! `spec/flavours/<name>.md` document, which is written before the parser (spec before code).
 
 mod go;
-mod java;
+pub(crate) mod java;
 mod js;
 mod python;
 mod rust;
