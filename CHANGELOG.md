@@ -5,6 +5,26 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added — P5: ReDoS lab
+- **`refract redos`**: per engine the predicted worst-case growth (linear, `O(n^k)`,
+  exponential) with an attack string, the measured time curve, and confirmed / not confirmed /
+  contradicted (ADR-0012, spec/redos.md). `--attack` replays any attack; `--no-measure` is static.
+- **Static analysis** (`refract_core::redos`): backtracking NFA with ε-path multiplicities, EDA
+  and IDA (chain degree), search retry loop, atomic/possessive never pivot; attacks whose
+  every early start fails, checked on `Σ{0,k}·L·Σ*` automata.
+- **Engine models**: Go/Rust linear; V8 with and without its linear fallback; the JDK loop memo
+  (n × body cost), derived from Pattern.java and measured.
+- **Oracle timing**: a `time` operation in all four runners; timeouts kill and restart a runner
+  (named Docker containers).
+- **Benchmark** (`bench/redos`): 65 patterns, Refract vs recheck 4.5.0 vs regexploit 1.0.0,
+  ground truth measured on CPython 3.15.2, V8 14.6 and JDK 25 (`bench/results/redos.md`).
+- Findings: JDK loop memo, V8 fallback coverage (docs/findings.md).
+
+### Known limits (P5)
+- Work before a late *successful* match (e.g. lazy `^[\s\S]*?\s*$`) is not predicted: attacks
+  are built to fail. The benchmark lists it as Refract's one miss.
+
+
 ### Added — P4: the remaining limits
 - **Look-ahead inside unbounded repetition** (e.g. `^(?:(?!ab).)*$`): least-fixed-point terms
   (`Re::Fix`/`Var`) in the derivative engine.

@@ -7,11 +7,12 @@ a formal model of what it matches, and tells you — with the **shortest concret
 two patterns (or one pattern in two engines) disagree. Every "different" verdict is replayed on
 the real engine before it is called confirmed.
 
-> **Status: pre-alpha (phases P0–P4).** Five flavours are implemented end to end — **JavaScript
+> **Status: pre-alpha (phases P0–P5).** Five flavours are implemented end to end — **JavaScript
 > (V8), Python `re`, Go `regexp`, Java `java.util.regex`** and Rust `regex` — including
-> **look-around and assertions anywhere in the pattern**. Every verdict is replayed on the real
-> engines. Next: match spans and the remaining non-regular constructs (P4), then the ReDoS lab
-> (P5). Nothing is published yet; the crate will be `refract-regex`.
+> **look-around and assertions anywhere in the pattern**, and a **ReDoS lab** that predicts
+> worst-case matching time per engine and measures it. Every verdict is replayed on the real
+> engines. Next: verified translation and test generation (P6), the web app (P7). Nothing is
+> published yet; the crate will be `refract-regex`.
 
 One pattern, every engine — the shortest input where each disagrees, confirmed on the engines:
 
@@ -58,6 +59,7 @@ $ cargo run -p refract-cli -- equiv --a 'a*' --b 'a+'             # witness: ""
 $ cargo run -p refract-cli -- equiv --op search --a '^abc' --b 'abc'   # witness: "aabc"
 $ cargo run -p refract-cli -- dfa '(a|b)*abb' --dot | dot -Tsvg > dfa.svg
 $ cargo run -p refract-cli -- refract --from js --op search '(?<=\$)\d+(?!\.)'   # look-around
+$ cargo run -p refract-cli -- redos '^(\w+\s?)+$'                  # ReDoS per engine, measured
 $ cargo run -p refract-cli -- flavors                             # semantics profiles
 ```
 
@@ -95,7 +97,12 @@ Exit codes: `0` equivalent, `1` different (or pattern rejected), `2` usage/analy
    **bounded** — every haystack up to length N, checked by a reference interpreter with each
    engine's rules — and reported as "no difference up to length N", never as proven. Atomic groups
    and possessive quantifiers are exact when their body is prefix-free.
-7. **Honest limits**: the few constructs still not analysed (Java `\X`, `\b{g}`, `\N{}`, `(?U)`,
+7. **ReDoS lab** ([spec/redos.md](spec/redos.md), [ADR-0012](docs/adr/0012-redos-lab.md)):
+   ambiguity of the backtracking NFA (exponential / polynomial degree) with an attack string,
+   per-engine models (Go and Rust linear; V8's linear fallback and where it stops applying; the
+   JDK's loop memo, which makes `(a+)+` quadratic, not exponential), then the attack is timed on
+   each engine and the prediction is only called confirmed when the measured curve agrees.
+8. **Honest limits**: the few constructs still not analysed (Java `\X`, `\b{g}`, `\N{}`, `(?U)`,
    `(?c)`; Python `\N{}`; JS properties of strings) are refused with their location.
 
 ## Evidence (from the test suite)
@@ -109,7 +116,8 @@ Exit codes: `0` equivalent, `1` different (or pattern rejected), `2` usage/analy
 | Derivative vs Thompson, Hopcroft vs Brzozowski | 1,000,000 random terms, identical minimal DFAs | `tests/double_construction.rs` |
 | Witness valid, shortest (brute force ≤ 6), identical across engines | 100,000 random pairs | `tests/equiv_props.rs` |
 | Bugs the oracles caught (all fixed, kept as regressions) | 2 in the Rust parser (plus 1 slow path), 2 in the Python parser, 5 in the oracle runners, 4 in JS/Go/Java parsing and lowering | test files, [docs/findings.md](docs/findings.md) |
-| Engine behaviour found | V8 `u`-mode search tries positions inside surrogate pairs (modelled) | [docs/findings.md](docs/findings.md) |
+| ReDoS prediction vs measured engines (65 patterns, search) | precision 100% on Python, V8 and the JDK; recall 97.6% / 97.6% / 97.0%; 110 verdicts confirmed super-linear by timing. recheck 4.5.0: 100% / 100% / 80.5% precision (it models one engine); regexploit 1.0.0: recall 48.8% / 48.8% / 60.6% | [bench/results/redos.md](bench/results/redos.md) |
+| Engine behaviour found | V8 `u`-mode search tries positions inside surrogate pairs; the JDK also searches inside pairs for BMP-only patterns; the JDK memoises loops (ReDoS); V8's linear fallback skips look-around, back-references, `i`/`u` (all modelled) | [docs/findings.md](docs/findings.md) |
 
 Reproduce: `cargo test --workspace`; set `PROPTEST_CASES` for long runs, `REFRACT_ORACLE=docker`
 to use the pinned engine images.
