@@ -5,6 +5,18 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed — web app UI0 (design spec, static mock)
+- `web/` is now SvelteKit (adapter-static, output `dist/`) with `tokens.css`, self-hosted Inter /
+  Newsreader / JetBrains Mono, per-engine colour + pattern + shape (`engines.ts`), light theme.
+- The Bench layout: top bar, dot-grid canvas, input column, prism with rays landing on measured
+  lane centres, beam lanes (Same / Differs with a vermilion bend node), verdict badges, evidence
+  chips, summary line, witness drawer with the witness card. Default example `^\d+$`, Search,
+  `"123\n"`: values checked on CPython 3.15.2, V8 14.6, Go 1.27.4, JDK 25.0.5.1; fixed until UI2.
+- Tests: axe at 1440 / 1024 / 390 px with and without the drawer, no horizontal scroll, grayscale
+  (distinct pattern and shape per engine), reduced motion, no third-party requests, no hex colours
+  in components.
+- The P7 screens (Lens, Stress, Translate) are removed until their UI phases (UI4; v0.8; v0.9).
+
 ## [0.5.0] — 2026-11-25
 
 The v0.5 scope of the plan (§3): JavaScript, Python, Go and Java (+ Rust), regular fragment with
@@ -23,6 +35,11 @@ generation and the integrations.
 - **Release**: `.github/workflows/release.yml` (binaries for Linux, macOS, Windows with
   checksums; GitHub release; web app to GitHub Pages; crates.io when `CARGO_REGISTRY_TOKEN` is
   set). The GitHub Action downloads release binaries for tags.
+
+### Fixed
+- Oracle: a native `python3`/`node` is used only when it is the pinned version (CPython 3.15,
+  V8 14.6); otherwise the pinned Docker image is used or the oracle tests skip. CI's Windows
+  runner has an older Node whose V8 lacks `(?i:…)` and duplicate group names.
 
 ### Changed
 - **A rejection counts as a disagreement.** `refract refract` ends with "N of M engines disagree

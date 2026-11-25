@@ -1,5 +1,5 @@
 // Hosts refract-core (WASM) off the main thread: the UI never blocks on an analysis.
-import init, * as core from "../wasm/refract_wasm.js";
+import init, * as core from "../../wasm/refract_wasm.js";
 
 type Call = { id: number; fn: "refract" | "dfa" | "redos" | "parse" | "translate"; args: string[] };
 

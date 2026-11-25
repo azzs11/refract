@@ -2,3 +2,4 @@ src/wasm/
 dist/
 test-results/
 playwright-report/
+.svelte-kit/

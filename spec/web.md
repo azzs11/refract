@@ -1,6 +1,8 @@
 # Web app ("optics bench") — P7 design
 
-Status: implemented (P7, ADR-0014). Source: plan §11 and §5.10.
+Status: **superseded** by the plan tab "Web app: design and build spec" (summarised in the
+project notes); this file describes the P7 app (Vite + Svelte), which UI0–UI6 replace. Source:
+plan §11 and §5.10.
 
 ## Goals
 
