@@ -7,14 +7,14 @@ a formal model of what it matches, and tells you — with the **shortest concret
 two patterns (or one pattern in two engines) disagree. Every "different" verdict is replayed on
 the real engine before it is called confirmed.
 
-> **Status: pre-alpha (phases P0–P7).** Five flavours are implemented end to end — **JavaScript
+> **Status: v0.5.0 (phases P0–P8).** Five flavours are implemented end to end — **JavaScript
 > (V8), Python `re`, Go `regexp`, Java `java.util.regex`** and Rust `regex` — including
 > **look-around and assertions anywhere in the pattern**, a **ReDoS lab** that predicts
 > worst-case matching time per engine and measures it, **verified translation** between
 > flavours and **test generation**, a **web app** that runs the analysis in WebAssembly, and
 > `refract check` for CI (GitHub Action), editors (VS Code) and assistants (MCP). Every verdict
-> is replayed on the real engines. Next: RefractBench and the release (P8). Nothing is published
-> yet; the crate will be `refract-regex`.
+> is replayed on the real engines. Release prepared (binaries, crates `refract-regex` /
+> `refract-cli`, web app on Pages); not published yet.
 
 One pattern, every engine — the shortest input where each disagrees, confirmed on the engines:
 
@@ -74,6 +74,13 @@ A Python `$` has no form in Go or Rust, so `^\w+$` translates there for full mat
 Tests that cover every state and transition of the minimal DFA, confirmed on the engine:
 `refract tests -f python --format pytest '^\d{3}-\d{4}$'` (also `jest`, `junit`, `go`, `json`).
 
+## Install
+
+```console
+$ cargo install --git https://github.com/azzs11/refract refract-cli   # or a release binary
+$ refract --help
+```
+
 ## Try it
 
 ```console
@@ -100,6 +107,23 @@ other.
 
 Exit codes: `0` equivalent, `1` different (or pattern rejected), `2` usage/analysis error,
 `3` a real engine contradicted the model — a Refract bug, please report it.
+
+## The 2026 census: how portable are real regexes?
+
+2,293 regexes from library code — the CPython 3.15 standard library, npm packages, the Go
+1.27 standard library, OpenJDK 25 and Rust crates — each compared with what a person porting it
+would write in the four other engines ([bench/results/census.md](bench/results/census.md)):
+
+- **34.8%** mean the same in all four other engines (proved, or bounded for back-references);
+- **63.8% disagree** with at least one other engine — they either match different strings
+  (55.0%, with the shortest witness) or are rejected by it (15.1%; a rejection disagrees on every
+  input, the empty string included). Some patterns do both.
+
+Differences come from line terminators (41% of differing pairs: `$` before a final
+newline, `.` and `\r`), non-ASCII characters (42%: Unicode `\w`/`\d`/`\s`, case folding) and
+ASCII-only cases (17%: e.g. CPython's `\s` includes `\x1c`–`\x1f`). All
+4,623 disagreements found — 3,864 shortest witnesses and 759 rejections — were replayed on the
+real engines: **0 contradictions** with the model. The method and its limits are in [docs/method.md](docs/method.md).
 
 ## Web app, CI, editor, assistant
 
@@ -165,6 +189,7 @@ Exit codes: `0` equivalent, `1` different (or pattern rejected), `2` usage/analy
 | Translations parse in the target and never change meaning | 50,000 random patterns × 5 source × 5 target flavours, 0 printer bugs, 0 differences (except V8's mid-surrogate search positions, which have no form elsewhere) | `tests/translation.rs` |
 | Verified translations on the real engines | 20,000 random Python↔JS patterns; every coverage string gets the model's answer on CPython and V8 | `tests/translation_engines.rs` |
 | Regex literals found in source files | 20,000 random files per language, no panics; a planted call is always found | `tests/extract_props.rs` |
+| Real regexes: predicted differences and rejections vs the engines | 3,864 witnesses + 759 rejections from 2,293 library regexes, 0 contradictions | [bench/results/census.md](bench/results/census.md) |
 | Engine behaviour found | V8 `u`-mode search tries positions inside surrogate pairs; the JDK also searches inside pairs for BMP-only patterns; the JDK memoises loops (ReDoS); V8's linear fallback skips look-around, back-references, `i`/`u` (all modelled) | [docs/findings.md](docs/findings.md) |
 
 Reproduce: `cargo test --workspace`; set `PROPTEST_CASES` for long runs, `REFRACT_ORACLE=docker`

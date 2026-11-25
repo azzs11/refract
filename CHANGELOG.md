@@ -5,6 +5,38 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.5.0] — 2026-11-25
+
+The v0.5 scope of the plan (§3): JavaScript, Python, Go and Java (+ Rust), regular fragment with
+look-around and anchors, flags, Unicode classes, case folding; full match and search; shortest
+witnesses; the real-engine oracle; CLI; web app. Plus ReDoS lab, verified translation, test
+generation and the integrations.
+
+### Added — P8: census, RefractBench, release
+- **Census** (`bench/census`): 2,293 regexes from library code in five ecosystems, compared with
+  their ports to the four other engines; every witness and rejection replayed (0 contradictions).
+  `bench/results/census.md`.
+- **`refract batch`**: one `refract refract --json` report per JSON input line, engines kept
+  running; `refract check --format literals` lists every regex found.
+- **`docs/method.md`**: the method, what each claim means, threats to validity.
+- **RefractBench overview** (`bench/README.md`), `CITATION.cff`.
+- **Release**: `.github/workflows/release.yml` (binaries for Linux, macOS, Windows with
+  checksums; GitHub release; web app to GitHub Pages; crates.io when `CARGO_REGISTRY_TOKEN` is
+  set). The GitHub Action downloads release binaries for tags.
+
+### Changed
+- **A rejection counts as a disagreement.** `refract refract` ends with "N of M engines disagree
+  (k differ, j reject the pattern)"; its JSON has `disagrees` and `shortest_disagreement` (the
+  witness, or `""` for a rejection, which disagrees on every input). The census headline is
+  "disagrees somewhere" (63.8%), split into differs and rejected.
+- The library crate is published as **`refract-regex`** (`refract-core` is taken on crates.io);
+  the workspace still calls it `refract-core`. `cargo test -p refract-regex`.
+- `refract refract` (and `check`) port JavaScript literals properly: other engines get the source
+  with `i m s` as inline flags; leading `(?ims)` becomes JS literal flags.
+- `refract check`: concatenated literals are joined, patterns built at run time are reported as
+  unsupported, Python and Java flag arguments are applied, shebang lines are skipped.
+- Oracle runner scripts are linked into `crates/refract-oracle/runners/` so the crate packages.
+
 ### Added — P7: web app and integrations
 - **Web app** (`web/`, `crates/refract-wasm`): Bench, Automaton lens, Stress lab and Translate
   screens; analysis in WebAssembly in a Web Worker; JavaScript verdicts and translations
