@@ -1,0 +1,132 @@
+/* Design tokens (plan tab "Web app: design and build spec" → Visual system). The only place
+   colours, fonts, spacing and motion are defined; components use these variables. Engine
+   colours live in src/lib/engines.ts. Light theme only (v1). */
+
+@layer tokens, base, components;
+
+@layer tokens {
+  :root {
+    color-scheme: light;
+
+    /* Colour */
+    --paper: #fafaf6;
+    --surface: #ffffff;
+    --ink: #1f2328;
+    --ink-muted: #5b6470;
+    --hairline: #e3e1d8;
+    --grid-dot: #d9d6cb;
+    --witness: #c2410c;
+    --same: #1e6b4a;
+    --focus: #2f5da8;
+    --pending: #e3e1d8;
+    --popover-shadow: 0 4px 16px rgb(31 35 40 / 8%);
+
+    /* Type: three families, one modular scale (~1.25) */
+    --font-ui: "Inter Variable", "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+    --font-serif: "Newsreader Variable", "Newsreader", Georgia, "Times New Roman", serif;
+    --font-mono: "JetBrains Mono Variable", "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    --text-12: 12px;
+    --text-14: 14px;
+    --text-16: 16px;
+    --text-20: 20px;
+    --text-28: 28px;
+    --text-40: 40px;
+    --leading-ui: 1.5;
+    --leading-code: 1.45;
+    --leading-prose: 1.6;
+
+    /* Space (base 4 px) and shape */
+    --s-1: 4px;
+    --s-2: 8px;
+    --s-3: 12px;
+    --s-4: 16px;
+    --s-6: 24px;
+    --s-8: 32px;
+    --s-12: 48px;
+    --radius: 6px;
+    --radius-pill: 999px;
+    --line: 1px;
+    --beam: 2px;
+    --target: 44px;
+
+    /* Layout */
+    --topbar-h: 48px;
+    --input-col: 400px;
+    --prism-col: 120px;
+    --lane-h: 72px;
+    --text-max: 720px;
+    --grid-step: 24px;
+
+    /* Motion */
+    --t-hover: 120ms;
+    --t-panel: 240ms;
+    --t-beam: 600ms;
+    --ease: cubic-bezier(0.2, 0, 0, 1);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    :root {
+      --t-hover: 0ms;
+      --t-panel: 0ms;
+      --t-beam: 0ms;
+    }
+  }
+}
+
+@layer base {
+  *,
+  *::before,
+  *::after {
+    box-sizing: border-box;
+  }
+  html,
+  body {
+    margin: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: var(--font-ui);
+    font-size: var(--text-14);
+    line-height: var(--leading-ui);
+    -webkit-font-smoothing: antialiased;
+  }
+  h1,
+  h2,
+  h3 {
+    font-family: var(--font-serif);
+    font-weight: 500;
+    margin: 0;
+  }
+  code,
+  kbd,
+  pre,
+  textarea.code,
+  .mono {
+    font-family: var(--font-mono);
+    font-variant-ligatures: none;
+    font-feature-settings: "liga" 0, "calt" 0;
+  }
+  button,
+  input,
+  select,
+  textarea {
+    font: inherit;
+    color: inherit;
+  }
+  :focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: 2px;
+  }
+  .visually-hidden {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+  @media (forced-colors: active) {
+    :focus-visible {
+      outline-color: Highlight;
+    }
+  }
+}

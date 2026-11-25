@@ -127,13 +127,12 @@ real engines: **0 contradictions** with the model. The method and its limits are
 
 ## Web app, CI, editor, assistant
 
-- **Web** (`web/`, the "optics bench"): one row per engine with the witness, the minimal DFA
-  with the witness path lit, the ReDoS lab with timing in your browser, and verified
-  translation. The analysis runs in WebAssembly in a Web Worker; nothing is sent anywhere;
-  JavaScript verdicts are replayed live on the browser's own engine. Five-engine refraction:
-  median 12 ms, p95 16 ms; Lighthouse 99 / 100 / 100 / 100; axe clean on every screen
-  ([bench/results/web.md](bench/results/web.md)).
-  `cd web && npm ci && npm run wasm && npm run dev`.
+- **Web** (`web/`, the "optics bench"): being rebuilt to the design spec (SvelteKit, light
+  theme with per-engine patterns, five evidence levels) one UI phase at a time. **UI0** is in:
+  the Bench layout with the default example `^\d+$` on `"123\n"` (Python and Java match;
+  JavaScript and Go do not), checked on the real engines but fixed; live analysis returns in UI2.
+  The P7 app's measurements (WASM refraction median 12 ms; Lighthouse 99/100/100/100) are in
+  [bench/results/web.md](bench/results/web.md). `cd web && npm ci && npm run dev`.
 - **`refract check src/`** finds regex literals in Python, JS/TS, Go, Java and Rust files and
   reports patterns the engine rejects, predicted ReDoS, and (`--targets js,go`) meaning changes,
   each with the command that confirms it on the real engine. `--format github` annotates pull

@@ -1,5 +1,8 @@
 # Web app benchmark (P7)
 
+Measured on the P7 app (Vite + Svelte). The app is being rebuilt to the design spec (UI0–UI6);
+the WASM latency benchmark returns with UI2 and these numbers will be remeasured then.
+
 Generated from `bench/results/web.json` and `bench/results/lighthouse.json`; rerun with the
 commands in [bench/web/README.md](../web/README.md).
 

@@ -6,7 +6,8 @@ import { readFileSync, writeFileSync } from "node:fs";
 const corpus = JSON.parse(readFileSync("../bench/web/corpus.json", "utf8")) as { patterns: string[] };
 
 test("five-engine refraction latency in WebAssembly", async ({ page, browser }) => {
-  test.skip(!process.env.BENCH, "set BENCH=1");
+  // The UI0 Bench is a static mock; the latency benchmark returns when UI2 wires the WASM core.
+  test.skip(true, "returns in UI2 (bench/results/web.json is from the P7 app)");
   test.setTimeout(600_000);
   const rows: { pattern: string; ms: number | null; outcome: string }[] = [];
   for (const p of corpus.patterns) {
