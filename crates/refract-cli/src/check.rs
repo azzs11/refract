@@ -34,6 +34,8 @@ pub enum Format {
     Json,
     /// GitHub Actions workflow commands (annotations on the pull request).
     Github,
+    /// Every regex literal found, one JSON line each, without analysis (corpus building).
+    Literals,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, clap::ValueEnum)]
@@ -195,7 +197,7 @@ fn analyse(path: &str, f: Found, targets: &[Flavor], redos: bool, out: &mut Vec<
         if t == f.flavor {
             continue;
         }
-        let Some(text) = port(&f.pattern, f.flavor, t) else {
+        let Some(text) = crate::commands::port(&f.pattern, f.flavor, t) else {
             continue;
         };
         let msg = match parse(t, &text) {
@@ -233,41 +235,6 @@ fn analyse(path: &str, f: Found, targets: &[Flavor], redos: bool, out: &mut Vec<
             );
         }
     }
-}
-
-/// The pattern as someone porting it would write it in `to`: JS literals lose their slashes
-/// (`i m s` flags become inline flags; `u`/`v` have no inline form, so no port), and other
-/// patterns become a JS literal without flags.
-fn port(pattern: &str, from: Flavor, to: Flavor) -> Option<String> {
-    if from == Flavor::JavaScript {
-        let rest = pattern.strip_prefix('/')?;
-        let end = rest.rfind('/')?;
-        let (body, flags) = (&rest[..end], &rest[end + 1..]);
-        if flags.contains(['u', 'v']) {
-            return None;
-        }
-        let inline: String = flags.chars().filter(|c| "ims".contains(*c)).collect();
-        let body = body.replace("\\/", "/");
-        return Some(if inline.is_empty() {
-            body
-        } else {
-            format!("(?{inline}){body}")
-        });
-    }
-    if to == Flavor::JavaScript {
-        let mut out = String::from("/");
-        let mut escaped = false;
-        for c in pattern.chars() {
-            if c == '/' && !escaped {
-                out.push('\\');
-            }
-            escaped = c == '\\' && !escaped;
-            out.push(c);
-        }
-        out.push('/');
-        return Some(out);
-    }
-    Some(pattern.to_string())
 }
 
 /// GitHub workflow-command escaping.
@@ -308,6 +275,15 @@ pub fn check(
         };
         for f in extract(&src, lang) {
             literals += 1;
+            if matches!(format, Format::Literals) {
+                println!(
+                    "{}",
+                    json!({"path": name, "line": f.line, "column": f.col, "flavor": f.flavor.name(),
+                           "operation": f.op.name(), "call": f.call, "pattern": f.pattern,
+                           "unsupported": f.unsupported})
+                );
+                continue;
+            }
             analyse(&name, f, targets, redos, &mut findings);
         }
     }
@@ -317,6 +293,7 @@ pub fn check(
         Severity::Error => "error",
     };
     match format {
+        Format::Literals => {}
         Format::Json => {
             let v: Vec<_> = findings
                 .iter()
@@ -421,6 +398,15 @@ mod tests {
 
     #[test]
     fn ports_js_literals() {
+        use crate::commands::port;
+        assert_eq!(
+            port("(?im)a", Flavor::Python, Flavor::JavaScript).as_deref(),
+            Some("/a/im")
+        );
+        assert_eq!(
+            port("(?x)a", Flavor::Python, Flavor::JavaScript).as_deref(),
+            Some("/(?x)a/")
+        );
         assert_eq!(
             port("/a\\/b/gi", Flavor::JavaScript, Flavor::Python).as_deref(),
             Some("(?i)a/b")

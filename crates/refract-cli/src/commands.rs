@@ -344,7 +344,7 @@ pub fn flavors() -> Result<ExitCode> {
 }
 
 /// One row of a cross-engine report.
-struct Row {
+pub struct Row {
     flavor: Flavor,
     verdict: String,
     witness: Option<String>,
@@ -354,18 +354,59 @@ struct Row {
     note: String,
 }
 
-/// `refract refract`: one pattern, every engine, the shortest disagreement each, replayed.
-pub fn refract(
+/// The pattern as someone porting it would write it in `to`: JS literals lose their slashes
+/// (`i m s` flags become inline flags; `u`/`v` have no inline form, so no port), and other
+/// patterns become a JS literal without flags.
+pub fn port(pattern: &str, from: Flavor, to: Flavor) -> Option<String> {
+    if from == Flavor::JavaScript {
+        let rest = pattern.strip_prefix('/')?;
+        let end = rest.rfind('/')?;
+        let (body, flags) = (&rest[..end], &rest[end + 1..]);
+        if flags.contains(['u', 'v']) {
+            return None;
+        }
+        let inline: String = flags.chars().filter(|c| "ims".contains(*c)).collect();
+        let body = body.replace("\\/", "/");
+        return Some(if inline.is_empty() {
+            body
+        } else {
+            format!("(?{inline}){body}")
+        });
+    }
+    if to == Flavor::JavaScript {
+        // Leading global flags that JS has as literal flags move there: `(?is)a` → `/a/is`.
+        let (pattern, flags) = match pattern.strip_prefix("(?").and_then(|r| r.split_once(')')) {
+            Some((f, rest)) if !f.is_empty() && f.chars().all(|c| "ims".contains(c)) => (rest, f),
+            _ => (pattern, ""),
+        };
+        let mut out = String::from("/");
+        let mut escaped = false;
+        for c in pattern.chars() {
+            if c == '/' && !escaped {
+                out.push('\\');
+            }
+            escaped = c == '\\' && !escaped;
+            out.push(c);
+        }
+        out.push('/');
+        out.push_str(flags);
+        return Some(out);
+    }
+    Some(pattern.to_string())
+}
+
+/// Per target engine: the verdict for `pattern` (written for `from`), replayed on the engines.
+/// Returns the rows and the worst outcome (0 same, 1 different/rejected, 3 contradicted).
+pub fn refract_rows(
+    oracles: &mut Oracles,
+    budget: &Budget,
+    src_ir: &refract_core::Regex,
     from: Flavor,
     pattern: &str,
     targets: &[Flavor],
     op: Op,
-    as_json: bool,
-) -> Result<ExitCode> {
-    let budget = budget(None);
-    let src_ir = parse_pattern(from, pattern)
-        .map_err(|e| anyhow!("{from} pattern:\n{}", e.render(pattern)))?;
-    let mut oracles = Oracles::default();
+) -> (Vec<Row>, u8) {
+    let budget = budget.clone();
     let word = |m: bool| if m { "match" } else { "no match" };
     let mut rows = Vec::new();
     let mut worst = 0u8; // 0 same, 1 different/rejected, 3 contradicted
@@ -373,10 +414,23 @@ pub fn refract(
         if t == from {
             continue;
         }
-        let row = match parse_pattern(t, pattern) {
+        // What a person porting the pattern would write in `t` (JS literals ⇄ bare source).
+        let Some(text) = port(pattern, from, t) else {
+            rows.push(Row {
+                flavor: t,
+                verdict: "NOT ANALYSED".into(),
+                witness: None,
+                predicted: None,
+                status: "-".into(),
+                note: format!("JavaScript's u/v flags have no inline form in {t}"),
+            });
+            continue;
+        };
+        let text = text.as_str();
+        let row = match parse_pattern(t, text) {
             Err(e) if e.kind == refract_core::ErrorKind::Syntax => {
                 // Confirm the rejection on the real engine.
-                let status = match oracles.run(t, pattern, op, "") {
+                let status = match oracles.run(t, text, op, "") {
                     Err(m) if m.starts_with("rejected") => "confirmed".to_string(),
                     Err(m) => format!("predicted ({m})"),
                     Ok(_) => {
@@ -402,7 +456,7 @@ pub fn refract(
                 status: "-".into(),
                 note: e.message,
             },
-            Ok(ir) => match refract_core::equiv::compare(&src_ir, &ir, op, &budget) {
+            Ok(ir) => match refract_core::equiv::compare(src_ir, &ir, op, &budget) {
                 Err(e) => Row {
                     flavor: t,
                     verdict: "NOT ANALYSED".into(),
@@ -438,7 +492,7 @@ pub fn refract(
                         let src_m = w.accepted_by == Side::Left;
                         let (a, b) = (
                             oracles.run(from, pattern, op, &w.text),
-                            oracles.run(t, pattern, op, &w.text),
+                            oracles.run(t, text, op, &w.text),
                         );
                         let status = match (a, b) {
                             (Ok(x), Ok(y)) if x == src_m && y == !src_m => "confirmed".to_string(),
@@ -466,29 +520,65 @@ pub fn refract(
         };
         rows.push(row);
     }
-    if as_json {
-        let engines: Vec<_> = rows
-            .iter()
-            .map(|r| {
-                json!({
-                    "flavor": r.flavor.name(),
-                    "engine": oracles.label(r.flavor),
-                    "verdict": r.verdict,
-                    "witness": r.witness.as_ref().map(|w| json!({"text": w, "escaped": escape(w)})),
-                    "source_matches": r.predicted.map(|p| p.0),
-                    "target_matches": r.predicted.map(|p| p.1),
-                    "status": r.status,
-                    "note": r.note,
-                })
+    (rows, worst)
+}
+
+/// The JSON report of `refract refract --json` (also one line of `refract batch`).
+pub fn refract_json(
+    oracles: &mut Oracles,
+    from: Flavor,
+    pattern: &str,
+    op: Op,
+    rows: &[Row],
+) -> serde_json::Value {
+    let engines: Vec<_> = rows
+        .iter()
+        .map(|r| {
+            json!({
+                "flavor": r.flavor.name(),
+                "engine": oracles.label(r.flavor),
+                "verdict": r.verdict,
+                // A disagreement is DIFFERS (shortest witness) or REJECTS (the engine refuses the
+                // pattern, so the engines disagree on every input; the shortest is "").
+                "disagrees": matches!(r.verdict.as_str(), "DIFFERS" | "REJECTS"),
+                "witness": r.witness.as_ref().map(|w| json!({"text": w, "escaped": escape(w)})),
+                "shortest_disagreement": match r.verdict.as_str() {
+                    "DIFFERS" => r.witness.as_ref().map(|w| json!({"text": w, "escaped": escape(w)})),
+                    "REJECTS" => Some(json!({"text": "", "escaped": "\"\"", "why": "the engine rejects the pattern, so every input disagrees"})),
+                    _ => None,
+                },
+                "source_matches": r.predicted.map(|p| p.0),
+                "target_matches": r.predicted.map(|p| p.1),
+                "status": r.status,
+                "note": r.note,
             })
-            .collect();
-        let out = json!({
-            "pattern": pattern,
-            "source": from.name(),
-            "source_engine": oracles.label(from),
-            "operation": op.name(),
-            "engines": engines,
-        });
+        })
+        .collect();
+    json!({
+        "pattern": pattern,
+        "source": from.name(),
+        "source_engine": oracles.label(from),
+        "operation": op.name(),
+        "engines": engines,
+    })
+}
+
+/// `refract refract`: one pattern, every engine, the shortest disagreement each, replayed.
+pub fn refract(
+    from: Flavor,
+    pattern: &str,
+    targets: &[Flavor],
+    op: Op,
+    as_json: bool,
+) -> Result<ExitCode> {
+    let budget = budget(None);
+    let src_ir = parse_pattern(from, pattern)
+        .map_err(|e| anyhow!("{from} pattern:\n{}", e.render(pattern)))?;
+    let mut oracles = Oracles::default();
+    let (rows, worst) = refract_rows(&mut oracles, &budget, &src_ir, from, pattern, targets, op);
+    let word = |m: bool| if m { "match" } else { "no match" };
+    if as_json {
+        let out = refract_json(&mut oracles, from, pattern, op, &rows);
         println!("{}", serde_json::to_string_pretty(&out)?);
     } else {
         println!("pattern    {pattern}");
@@ -520,6 +610,107 @@ pub fn refract(
                 println!("{:<8} {}", "", r.note);
             }
         }
+        let differ = rows.iter().filter(|r| r.verdict == "DIFFERS").count();
+        let reject = rows.iter().filter(|r| r.verdict == "REJECTS").count();
+        println!();
+        println!(
+            "{} of {} engines disagree with {} ({differ} differ, {reject} reject the pattern)",
+            differ + reject,
+            rows.len(),
+            from.name()
+        );
     }
     Ok(ExitCode::from(worst))
+}
+
+/// `refract batch`: one `refract refract` report per JSON line (`{"from", "pattern", "op"?,
+/// "to"?, "id"?}`), with the engines kept running between patterns. For corpora (bench/census).
+pub fn batch(input: Option<&std::path::Path>, time_limit: f64) -> Result<ExitCode> {
+    use std::io::{BufRead, Write};
+    let reader: Box<dyn BufRead> = match input {
+        Some(p) => Box::new(std::io::BufReader::new(std::fs::File::open(p)?)),
+        None => Box::new(std::io::BufReader::new(std::io::stdin())),
+    };
+    let mut oracles = Oracles::default();
+    let mut out = std::io::stdout().lock();
+    let all = [
+        Flavor::JavaScript,
+        Flavor::Python,
+        Flavor::Go,
+        Flavor::Java,
+        Flavor::Rust,
+    ];
+    for (n, line) in reader.lines().enumerate() {
+        let line = line?;
+        if line.trim().is_empty() {
+            continue;
+        }
+        let req: serde_json::Value = match serde_json::from_str(&line) {
+            Ok(v) => v,
+            Err(e) => {
+                writeln!(
+                    out,
+                    "{}",
+                    json!({"line": n + 1, "error": format!("bad JSON: {e}")})
+                )?;
+                continue;
+            }
+        };
+        let id = req.get("id").cloned().unwrap_or(json!(n + 1));
+        let get = |k: &str| req.get(k).and_then(|v| v.as_str()).unwrap_or("");
+        let parsed = (
+            get("from").parse::<Flavor>(),
+            get("op").parse::<Op>().or_else(|_| {
+                if get("op").is_empty() {
+                    Ok(Op::FullMatch)
+                } else {
+                    Err("bad op".to_string())
+                }
+            }),
+        );
+        let (from, op) = match parsed {
+            (Ok(f), Ok(o)) => (f, o),
+            (Err(e), _) | (_, Err(e)) => {
+                writeln!(out, "{}", json!({"id": id, "error": e}))?;
+                continue;
+            }
+        };
+        let targets: Vec<Flavor> = match req.get("to").and_then(|v| v.as_array()) {
+            Some(v) => v.iter().filter_map(|x| x.as_str()?.parse().ok()).collect(),
+            None => all.to_vec(),
+        };
+        let pattern = get("pattern");
+        let mut b = Budget::default();
+        b.time_limit = Some(std::time::Duration::from_secs_f64(time_limit));
+        let b = b.start();
+        let v = match parse_pattern(from, pattern) {
+            Err(e) => {
+                // A rejection of the source pattern is replayed on its own engine too: if the
+                // engine accepts it, our front-end is wrong.
+                let replay = if e.kind == refract_core::ErrorKind::Syntax {
+                    match oracles.run(from, pattern, op, "") {
+                        Err(m) if m.starts_with("rejected") => "confirmed".to_string(),
+                        Err(m) => format!("predicted ({m})"),
+                        Ok(_) => "CONTRADICTED: the real engine accepts it".to_string(),
+                    }
+                } else {
+                    "-".to_string()
+                };
+                json!({"id": id, "pattern": pattern, "source": from.name(), "operation": op.name(),
+                       "error": {"kind": format!("{:?}", e.kind).to_lowercase(), "message": e.message, "replay": replay}})
+            }
+            Ok(ir) => {
+                let (rows, _) = refract_rows(&mut oracles, &b, &ir, from, pattern, &targets, op);
+                let mut v = refract_json(&mut oracles, from, pattern, op, &rows);
+                v["id"] = id;
+                v
+            }
+        };
+        writeln!(out, "{v}")?;
+        out.flush()?;
+        if (n + 1) % 100 == 0 {
+            eprintln!("refract batch: {} patterns", n + 1);
+        }
+    }
+    Ok(ExitCode::SUCCESS)
 }

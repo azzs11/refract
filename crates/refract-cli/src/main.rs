@@ -183,6 +183,15 @@ enum Command {
     /// Model Context Protocol server on stdio: lets an assistant check its regexes with these
     /// commands (tools: refract, equiv, translate, redos, tests).
     Mcp,
+    /// Many patterns: one `refract refract --json` report per JSON line of input
+    /// (`{"from": "python", "pattern": "...", "op": "full", "to": [...], "id": ...}`).
+    Batch {
+        /// Input file (default: stdin).
+        input: Option<std::path::PathBuf>,
+        /// Seconds per pattern.
+        #[arg(long, default_value_t = 5.0)]
+        time_limit: f64,
+    },
     /// List flavours and their semantics profiles.
     Flavors,
 }
@@ -285,6 +294,7 @@ fn run(cli: Cli) -> Result<ExitCode> {
             check::check(&paths, &targets, !no_redos, format, fail_on)
         }
         Command::Mcp => mcp::serve(),
+        Command::Batch { input, time_limit } => commands::batch(input.as_deref(), time_limit),
         Command::Flavors => commands::flavors(),
     }
 }
