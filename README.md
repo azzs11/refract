@@ -7,12 +7,14 @@ a formal model of what it matches, and tells you — with the **shortest concret
 two patterns (or one pattern in two engines) disagree. Every "different" verdict is replayed on
 the real engine before it is called confirmed.
 
-> **Status: pre-alpha (phases P0–P6).** Five flavours are implemented end to end — **JavaScript
+> **Status: pre-alpha (phases P0–P7).** Five flavours are implemented end to end — **JavaScript
 > (V8), Python `re`, Go `regexp`, Java `java.util.regex`** and Rust `regex` — including
 > **look-around and assertions anywhere in the pattern**, a **ReDoS lab** that predicts
 > worst-case matching time per engine and measures it, **verified translation** between
-> flavours and **test generation**. Every verdict is replayed on the real engines. Next: the web
-> app (P7). Nothing is published yet; the crate will be `refract-regex`.
+> flavours and **test generation**, a **web app** that runs the analysis in WebAssembly, and
+> `refract check` for CI (GitHub Action), editors (VS Code) and assistants (MCP). Every verdict
+> is replayed on the real engines. Next: RefractBench and the release (P8). Nothing is published
+> yet; the crate will be `refract-regex`.
 
 One pattern, every engine — the shortest input where each disagrees, confirmed on the engines:
 
@@ -99,6 +101,25 @@ other.
 Exit codes: `0` equivalent, `1` different (or pattern rejected), `2` usage/analysis error,
 `3` a real engine contradicted the model — a Refract bug, please report it.
 
+## Web app, CI, editor, assistant
+
+- **Web** (`web/`, the "optics bench"): one row per engine with the witness, the minimal DFA
+  with the witness path lit, the ReDoS lab with timing in your browser, and verified
+  translation. The analysis runs in WebAssembly in a Web Worker; nothing is sent anywhere;
+  JavaScript verdicts are replayed live on the browser's own engine. Five-engine refraction:
+  median 12 ms, p95 16 ms; Lighthouse 99 / 100 / 100 / 100; axe clean on every screen
+  ([bench/results/web.md](bench/results/web.md)).
+  `cd web && npm ci && npm run wasm && npm run dev`.
+- **`refract check src/`** finds regex literals in Python, JS/TS, Go, Java and Rust files and
+  reports patterns the engine rejects, predicted ReDoS, and (`--targets js,go`) meaning changes,
+  each with the command that confirms it on the real engine. `--format github` annotates pull
+  requests; the [GitHub Action](integrations/github-action/README.md) wraps it.
+- **VS Code**: [integrations/vscode](integrations/vscode/README.md) shows the same findings as
+  diagnostics.
+- **MCP**: `refract mcp` serves the tools `refract`, `equiv`, `translate`, `redos` and `tests`
+  over stdio, so an assistant can check the regexes it writes
+  (`claude mcp add refract -- refract mcp`).
+
 ## How verification works
 
 1. **Front-ends that mirror each engine's own parser** (CPython's `_parser.py`, V8's Annex B and
@@ -143,6 +164,7 @@ Exit codes: `0` equivalent, `1` different (or pattern rejected), `2` usage/analy
 | ReDoS prediction vs measured engines (65 patterns, search) | precision 100% on Python, V8 and the JDK; recall 97.6% / 97.6% / 97.0%; 110 verdicts confirmed super-linear by timing. recheck 4.5.0: 100% / 100% / 80.5% precision (it models one engine); regexploit 1.0.0: recall 48.8% / 48.8% / 60.6% | [bench/results/redos.md](bench/results/redos.md) |
 | Translations parse in the target and never change meaning | 50,000 random patterns × 5 source × 5 target flavours, 0 printer bugs, 0 differences (except V8's mid-surrogate search positions, which have no form elsewhere) | `tests/translation.rs` |
 | Verified translations on the real engines | 20,000 random Python↔JS patterns; every coverage string gets the model's answer on CPython and V8 | `tests/translation_engines.rs` |
+| Regex literals found in source files | 20,000 random files per language, no panics; a planted call is always found | `tests/extract_props.rs` |
 | Engine behaviour found | V8 `u`-mode search tries positions inside surrogate pairs; the JDK also searches inside pairs for BMP-only patterns; the JDK memoises loops (ReDoS); V8's linear fallback skips look-around, back-references, `i`/`u` (all modelled) | [docs/findings.md](docs/findings.md) |
 
 Reproduce: `cargo test --workspace`; set `PROPTEST_CASES` for long runs, `REFRACT_ORACLE=docker`
@@ -164,8 +186,11 @@ to use the pinned engine images.
 ```
 crates/refract-core   parsers, IR, char-set algebra, derivative + Thompson engines,
                       minimisation, equivalence (library, no I/O, forbid(unsafe))
-crates/refract-cli    the `refract` binary (parse, dfa, equiv, refract, redos, translate, tests, flavors)
+crates/refract-cli    the `refract` binary (parse, dfa, equiv, refract, redos, translate, tests, check, mcp, flavors)
 crates/refract-oracle real-engine harness (JSON lines, native or pinned Docker)
+crates/refract-wasm   WebAssembly bindings for the web app
+web/                  the optics bench (Vite + Svelte, Playwright + axe tests)
+integrations/         GitHub Action, VS Code extension
 oracle/               one runner + Dockerfile per engine
 tools/                table generators that run inside each engine
 spec/                 IR, witness definition, per-flavour semantics (spec before code)

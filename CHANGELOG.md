@@ -5,6 +5,23 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added — P7: web app and integrations
+- **Web app** (`web/`, `crates/refract-wasm`): Bench, Automaton lens, Stress lab and Translate
+  screens; analysis in WebAssembly in a Web Worker; JavaScript verdicts and translations
+  replayed live on the browser's engine; permalinks, keyboard (`/`, `1`–`5`, `w`), visible
+  invisibles, colour-blind-safe engine colours with shapes. Playwright tests with axe on every
+  screen in light and dark; benchmark in `bench/results/web.md` (median 12 ms, p95 16 ms;
+  Lighthouse 99/100/100/100). ADR-0014.
+- **`refract check`**: regex literals in Python, JS/TS, Go, Java and Rust source
+  (`refract_core::extract`, `refract: <flavor>` directives); rejected patterns, predicted ReDoS,
+  portability notes with witnesses; text, JSON and GitHub annotation output; `--fail-on`.
+- **GitHub Action** (`integrations/github-action`), **VS Code extension**
+  (`integrations/vscode`), **MCP server** (`refract mcp`: refract, equiv, translate, redos,
+  tests).
+- `refract-core` uses `web-time` so budgets work on `wasm32-unknown-unknown`.
+- CI: web job (WASM build, svelte-check, Playwright + axe), the Action run on this repository,
+  VS Code helper tests.
+
 ### Added — P6: verified translation and test generation
 - **`refract translate`**: prints the pattern in each target flavour, re-parses it with the
   target's front-end and proves it equivalent under full match and search; each check is

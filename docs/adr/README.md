@@ -16,5 +16,6 @@ consequences. Status values: accepted, superseded (with a link).
 | [0011](0011-bounded-analysis.md) | Bounded analysis with a backtracking reference interpreter | accepted |
 | [0012](0012-redos-lab.md) | ReDoS lab: ambiguity prediction, engine models, measured confirmation | accepted |
 | [0013](0013-verified-translation.md) | Verified translation by printing and proving; DFA-coverage tests | accepted |
+| [0014](0014-web-and-integrations.md) | Web app in WASM; integrations reuse the CLI | accepted |
 | [0008](0008-lookaround-construction.md) | Exact look-around by continuations and look-behind context | accepted |
 | [0009](0009-engine-measured-tables-and-oracle.md) | Tables measured from each engine; one oracle protocol | accepted |
