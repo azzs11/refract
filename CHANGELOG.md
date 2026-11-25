@@ -5,6 +5,28 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added — P6: verified translation and test generation
+- **`refract translate`**: prints the pattern in each target flavour, re-parses it with the
+  target's front-end and proves it equivalent under full match and search; each check is
+  replayed on both real engines. Falls back to a full-match-only translation (tail `$` → text
+  end) when no form preserves search, and says so. Constructs with no form are named with their
+  location (ADR-0013).
+- **Printer** (`refract_core::print`): target shorthands (`\w`, `\d`, `\s`, `\p{L}`, …) only where
+  the target resolves them to a subset of the set; word boundaries over another engine's word
+  set via look-around; look-behind width rules (Python fixed, Java bounded); back-references
+  across JavaScript only when their group has surely matched.
+- **`refract tests`**: cases covering every state and transition of the minimal DFA (sampled
+  for back-references), labelled by the model, confirmed on the engine, emitted as pytest, Jest,
+  JUnit 5, Go `testing` or JSON.
+- Property tests: `tests/translation.rs` (50k), `tests/translation_engines.rs` (CPython + V8).
+
+### Fixed
+- Reference interpreter: an empty loop iteration keeps its captures in CPython and the JDK
+  (`()?\1` matches `""`); found by the Java oracle property test.
+
+### Deferred
+- LexLint (plan P6) is deferred; it is outside the v0.5 scope (plan §3).
+
 ### Added — P5: ReDoS lab
 - **`refract redos`**: per engine the predicted worst-case growth (linear, `O(n^k)`,
   exponential) with an attack string, the measured time curve, and confirmed / not confirmed /

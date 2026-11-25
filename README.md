@@ -7,12 +7,12 @@ a formal model of what it matches, and tells you — with the **shortest concret
 two patterns (or one pattern in two engines) disagree. Every "different" verdict is replayed on
 the real engine before it is called confirmed.
 
-> **Status: pre-alpha (phases P0–P5).** Five flavours are implemented end to end — **JavaScript
+> **Status: pre-alpha (phases P0–P6).** Five flavours are implemented end to end — **JavaScript
 > (V8), Python `re`, Go `regexp`, Java `java.util.regex`** and Rust `regex` — including
-> **look-around and assertions anywhere in the pattern**, and a **ReDoS lab** that predicts
-> worst-case matching time per engine and measures it. Every verdict is replayed on the real
-> engines. Next: verified translation and test generation (P6), the web app (P7). Nothing is
-> published yet; the crate will be `refract-regex`.
+> **look-around and assertions anywhere in the pattern**, a **ReDoS lab** that predicts
+> worst-case matching time per engine and measures it, **verified translation** between
+> flavours and **test generation**. Every verdict is replayed on the real engines. Next: the web
+> app (P7). Nothing is published yet; the crate will be `refract-regex`.
 
 One pattern, every engine — the shortest input where each disagrees, confirmed on the engines:
 
@@ -50,6 +50,27 @@ status     confirmed on the real engines
 ```
 
 `\d` is Unicode-aware in Rust, so it matches ARABIC-INDIC DIGIT ZERO; `[0-9]` does not.
+
+Translate, with a proof — the printed pattern is re-parsed by the target's front-end, proven
+equivalent under full match and search, and replayed on both real engines:
+
+```console
+$ refract translate --from js --to python,java,go '/(?<=\$)\d+(?:\.\d\d)?\b/u'
+python VERIFIED (full match and search)  (?<=\$)[0-9]+(?:\.[0-9][0-9])?(?a:\b)
+         full-match proven                                       confirmed on 2 test strings
+         search     proven                                       confirmed on 8 test strings
+java   VERIFIED (full match and search)  (?<=\$)\d+(?:\.\d\d)?(?:(?<=\w)(?!\w)|(?<!\w)(?=\w))
+         ...
+go     UNTRANSLATABLE  go has no look-around  (at `(?<=\$)`)
+```
+
+JS `\d` and `\b` are ASCII; Python's are Unicode, so they become `[0-9]` and `(?a:\b)`. Java's
+`\b` also counts marks after letters as word characters, so it is spelled out with look-around.
+A Python `$` has no form in Go or Rust, so `^\w+$` translates there for full match only
+(`\A…\z`) — and the report says so.
+
+Tests that cover every state and transition of the minimal DFA, confirmed on the engine:
+`refract tests -f python --format pytest '^\d{3}-\d{4}$'` (also `jest`, `junit`, `go`, `json`).
 
 ## Try it
 
@@ -102,7 +123,10 @@ Exit codes: `0` equivalent, `1` different (or pattern rejected), `2` usage/analy
    per-engine models (Go and Rust linear; V8's linear fallback and where it stops applying; the
    JDK's loop memo, which makes `(a+)+` quadratic, not exponential), then the attack is timed on
    each engine and the prediction is only called confirmed when the measured curve agrees.
-8. **Honest limits**: the few constructs still not analysed (Java `\X`, `\b{g}`, `\N{}`, `(?U)`,
+8. **Verified translation** ([ADR-0013](docs/adr/0013-verified-translation.md)): the IR is
+   printed in the target using only shorthands the *target* resolves to the same characters,
+   re-parsed by the target's front-end, and proven equivalent; constructs with no form are named.
+9. **Honest limits**: the few constructs still not analysed (Java `\X`, `\b{g}`, `\N{}`, `(?U)`,
    `(?c)`; Python `\N{}`; JS properties of strings) are refused with their location.
 
 ## Evidence (from the test suite)
@@ -115,8 +139,10 @@ Exit codes: `0` equivalent, `1` different (or pattern rejected), `2` usage/analy
 | Look-behind engine vs direct semantics | 100,000 random terms | `tests/lookbehind_engine.rs` |
 | Derivative vs Thompson, Hopcroft vs Brzozowski | 1,000,000 random terms, identical minimal DFAs | `tests/double_construction.rs` |
 | Witness valid, shortest (brute force ≤ 6), identical across engines | 100,000 random pairs | `tests/equiv_props.rs` |
-| Bugs the oracles caught (all fixed, kept as regressions) | 2 in the Rust parser (plus 1 slow path), 2 in the Python parser, 5 in the oracle runners, 4 in JS/Go/Java parsing and lowering | test files, [docs/findings.md](docs/findings.md) |
+| Bugs the oracles caught (all fixed, kept as regressions) | 2 in the Rust parser (plus 1 slow path), 2 in the Python parser, 5 in the oracle runners, 4 in JS/Go/Java parsing and lowering, 1 in the reference interpreter (empty loop iterations keep their captures in CPython and the JDK) | test files, [docs/findings.md](docs/findings.md) |
 | ReDoS prediction vs measured engines (65 patterns, search) | precision 100% on Python, V8 and the JDK; recall 97.6% / 97.6% / 97.0%; 110 verdicts confirmed super-linear by timing. recheck 4.5.0: 100% / 100% / 80.5% precision (it models one engine); regexploit 1.0.0: recall 48.8% / 48.8% / 60.6% | [bench/results/redos.md](bench/results/redos.md) |
+| Translations parse in the target and never change meaning | 50,000 random patterns × 5 source × 5 target flavours, 0 printer bugs, 0 differences (except V8's mid-surrogate search positions, which have no form elsewhere) | `tests/translation.rs` |
+| Verified translations on the real engines | 20,000 random Python↔JS patterns; every coverage string gets the model's answer on CPython and V8 | `tests/translation_engines.rs` |
 | Engine behaviour found | V8 `u`-mode search tries positions inside surrogate pairs; the JDK also searches inside pairs for BMP-only patterns; the JDK memoises loops (ReDoS); V8's linear fallback skips look-around, back-references, `i`/`u` (all modelled) | [docs/findings.md](docs/findings.md) |
 
 Reproduce: `cargo test --workspace`; set `PROPTEST_CASES` for long runs, `REFRACT_ORACLE=docker`
@@ -138,7 +164,7 @@ to use the pinned engine images.
 ```
 crates/refract-core   parsers, IR, char-set algebra, derivative + Thompson engines,
                       minimisation, equivalence (library, no I/O, forbid(unsafe))
-crates/refract-cli    the `refract` binary (parse, dfa, equiv, refract, flavors)
+crates/refract-cli    the `refract` binary (parse, dfa, equiv, refract, redos, translate, tests, flavors)
 crates/refract-oracle real-engine harness (JSON lines, native or pinned Docker)
 oracle/               one runner + Dockerfile per engine
 tools/                table generators that run inside each engine
