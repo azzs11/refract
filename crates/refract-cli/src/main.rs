@@ -8,7 +8,9 @@ use clap::{Parser, Subcommand};
 use refract_core::{Engine, Flavor, Op};
 use std::process::ExitCode;
 
+mod check;
 mod commands;
+mod mcp;
 mod oracle;
 mod redos;
 mod translate;
@@ -160,6 +162,27 @@ enum Command {
         no_replay: bool,
         pattern: String,
     },
+    /// Scan source files (Python, JS/TS, Go, Java, Rust) for regex literals: patterns the engine
+    /// rejects, predicted ReDoS, and (with --targets) meaning changes in other engines.
+    ///
+    /// Exit 1 when a finding reaches --fail-on (default: warning).
+    Check {
+        /// Files or directories (default: the current directory).
+        paths: Vec<std::path::PathBuf>,
+        /// Also report where each pattern means something else in these engines.
+        #[arg(long, value_delimiter = ',')]
+        targets: Vec<Flavor>,
+        /// Skip the ReDoS prediction.
+        #[arg(long)]
+        no_redos: bool,
+        #[arg(long, value_enum, default_value = "text")]
+        format: check::Format,
+        #[arg(long, value_enum, default_value = "warning")]
+        fail_on: check::FailOn,
+    },
+    /// Model Context Protocol server on stdio: lets an assistant check its regexes with these
+    /// commands (tools: refract, equiv, translate, redos, tests).
+    Mcp,
     /// List flavours and their semantics profiles.
     Flavors,
 }
@@ -247,6 +270,21 @@ fn run(cli: Cli) -> Result<ExitCode> {
             no_replay,
             pattern,
         } => translate::tests(flavor, &pattern, op, format, no_replay),
+        Command::Check {
+            paths,
+            targets,
+            no_redos,
+            format,
+            fail_on,
+        } => {
+            let paths = if paths.is_empty() {
+                vec![".".into()]
+            } else {
+                paths
+            };
+            check::check(&paths, &targets, !no_redos, format, fail_on)
+        }
+        Command::Mcp => mcp::serve(),
         Command::Flavors => commands::flavors(),
     }
 }
