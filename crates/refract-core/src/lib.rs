@@ -21,10 +21,13 @@ pub mod flavor;
 pub mod interp;
 pub mod ir;
 pub mod minimize;
+pub mod print;
 pub mod redos;
 pub mod regular;
 pub mod tables;
+pub mod testgen;
 pub mod thompson;
+pub mod translate;
 pub mod unicode;
 pub mod utf16;
 

@@ -98,7 +98,7 @@ pub fn compare(a: &Regex, b: &Regex, op: Op, budget: &Budget) -> Result<Report> 
 /// Characters worth trying: one representative of every minterm of the sets the two patterns
 /// mention, plus a second, distinct character of the same minterm (preferring a case partner)
 /// so back-references can tell "same character" from "different character".
-fn bounded_alphabet(a: &Regex, b: &Regex) -> Vec<char> {
+pub fn bounded_alphabet(a: &Regex, b: &Regex) -> Vec<char> {
     use crate::ir::{Assertion, NodeKind, WordSet};
     let mut sets: Vec<crate::CharSet> = Vec::new();
     for re in [a, b] {
