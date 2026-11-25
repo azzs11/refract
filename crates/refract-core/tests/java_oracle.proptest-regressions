@@ -9,3 +9,4 @@ cc c7d456fb19f22de5e8f13a81e123fb136487976090e2432ab69de549b01ae27a # shrinks to
 cc ba4017ff9cd115a0818d5d2450f766fb88adeebe66d53362da3a27140a9d3c3d # shrinks to p = "$\\v", hay = ["\n"]
 cc 11f17b372d5e2ea152753c00aabe30506d2e03d35b8c1797a7dbdb2444ab42fd # shrinks to p = "\\z\\b", hay = ["𝒜\u{301}"]
 cc e7fea2c68acd5b6f33235b9c85f02ed0f54f9c7ea6cad5897024aa4c860decea # shrinks to p = "\\B", hay = ["a😀a"]
+cc 16718c25257237240265b9c0d95a6aff4302c04da6ca1629422199c40914185c # shrinks to p = "(?<n>)?\\1", hay = [""]

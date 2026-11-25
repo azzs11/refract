@@ -354,7 +354,10 @@ impl Interp<'_> {
             }
             let r = self.m(sub, pos, caps, &mut |p, caps: &mut Caps| {
                 if p == pos && count >= min {
-                    return Ok(false); // an empty iteration after `min` adds nothing
+                    // An empty iteration after `min` ends the loop. ECMAScript rejects it (and
+                    // its captures); CPython (`MAX_UNTIL`) and the JDK (`Loop`, `Ques`) keep it
+                    // and go on: `()?\1` matches "" there.
+                    return if self.js { Ok(false) } else { k(p, caps) };
                 }
                 self.rep(sub, min, max, greedy, groups, count + 1, p, caps, k)
             })?;
@@ -541,6 +544,30 @@ fn case_eq(case: BackrefCase, a: char, b: char) -> bool {
             use crate::flavor::java::{lower, upper};
             let (ua, ub) = (upper(a as u32), upper(b as u32));
             ua == ub || lower(ua) == lower(ub)
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::{Flavor, Op, parse};
+
+    /// An empty iteration keeps its captures in CPython and the JDK (found by
+    /// `tests/java_oracle.rs`); measured: `re.fullmatch(r"()?\1", "")` is a match.
+    #[test]
+    fn empty_iteration_sets_captures_outside_js() {
+        for (f, p) in [
+            (Flavor::Python, r"()?\1"),
+            (Flavor::Python, r"(a?)?\1b"),
+            (Flavor::Java, r"(?<n>)?\1"),
+            (Flavor::Java, r"()*\1"),
+        ] {
+            let re = parse(f, p).unwrap();
+            let hay = if p.ends_with('b') { "b" } else { "" };
+            assert!(
+                super::is_match(&re, Op::FullMatch, hay, 10_000).unwrap(),
+                "{f}:{p}"
+            );
         }
     }
 }
