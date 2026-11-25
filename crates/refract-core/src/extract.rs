@@ -138,26 +138,53 @@ pub fn extract(src: &str, lang: Lang) -> Vec<Found> {
             }
         }
     }
+    // `flags_at`: the call's `(` and the position of its flags argument (Python, Java).
     let push = |out: &mut Vec<Found>,
                 j: usize,
                 call: String,
                 op: Op,
                 unsupported: Option<String>,
-                pattern_of: &dyn Fn(String) -> String| {
+                pattern_of: &dyn Fn(String) -> String,
+                flags_at: Option<(usize, usize)>| {
         if directed.contains(&j) {
             return;
         }
-        if let Some((p, line, col)) = string(j) {
-            out.push(Found {
-                pattern: pattern_of(p),
-                flavor,
-                op,
-                line,
-                col,
-                call,
-                unsupported,
-            });
+        let Some((line, col)) = toks.get(j).map(|t| (t.line, t.col)) else {
+            return;
+        };
+        let Some((p, partial)) = literal(&toks, j, lang) else {
+            return;
+        };
+        let mut unsupported = unsupported;
+        if partial && unsupported.is_none() {
+            unsupported =
+                Some("the pattern is built at run time (concatenation or formatting)".into());
         }
+        let mut inline = String::new();
+        if let Some((open, pos)) = flags_at {
+            match flags(&toks, open, pos, lang) {
+                Ok(f) => inline = f,
+                Err(why) => {
+                    if unsupported.is_none() {
+                        unsupported = Some(why);
+                    }
+                }
+            }
+        }
+        let p = pattern_of(p);
+        out.push(Found {
+            pattern: if inline.is_empty() {
+                p
+            } else {
+                format!("(?{inline}){p}")
+            },
+            flavor,
+            op,
+            line,
+            col,
+            call,
+            unsupported,
+        });
     };
     let same = |p: String| p;
     for i in 0..toks.len() {
@@ -186,7 +213,21 @@ pub fn extract(src: &str, lang: Lang) -> Vec<Found> {
                         Op::Search
                     };
                     // `re.match` anchors at the start only; analysed as search (a superset).
-                    push(&mut out, i + 4, format!("re.{f}"), op, None, &same);
+                    let pos = match f {
+                        "compile" => 1,
+                        "split" => 3,
+                        "sub" | "subn" => 4,
+                        _ => 2,
+                    };
+                    push(
+                        &mut out,
+                        i + 4,
+                        format!("re.{f}"),
+                        op,
+                        None,
+                        &same,
+                        Some((i + 3, pos)),
+                    );
                 }
             }
             Lang::JavaScript => {
@@ -217,6 +258,7 @@ pub fn extract(src: &str, lang: Lang) -> Vec<Found> {
                             Op::Search,
                             None,
                             &|p: String| format!("/{p}/{flags}"),
+                            None,
                         );
                     }
                 }
@@ -236,6 +278,7 @@ pub fn extract(src: &str, lang: Lang) -> Vec<Found> {
                                 Op::Search,
                                 None,
                                 &same,
+                                None,
                             );
                         }
                         "MustCompilePOSIX" | "CompilePOSIX" => push(
@@ -245,6 +288,7 @@ pub fn extract(src: &str, lang: Lang) -> Vec<Found> {
                             Op::Search,
                             Some("POSIX leftmost-longest syntax is not modelled".into()),
                             &same,
+                            None,
                         ),
                         _ => {}
                     }
@@ -262,16 +306,15 @@ pub fn extract(src: &str, lang: Lang) -> Vec<Found> {
                     } else {
                         Op::Search
                     };
-                    let flags = punct(i + 5, ',') && f == "compile";
-                    let unsupported =
-                        flags.then(|| "compile flags argument is not analysed".to_string());
+                    let flags_at = (f == "compile").then_some((i + 3, 1));
                     push(
                         &mut out,
                         i + 4,
                         format!("Pattern.{f}"),
                         op,
-                        unsupported,
+                        None,
                         &same,
+                        flags_at,
                     );
                 } else if punct(i, '.')
                     && ident(i.wrapping_sub(1)) != Some("Pattern")
@@ -284,7 +327,15 @@ pub fn extract(src: &str, lang: Lang) -> Vec<Found> {
                     } else {
                         Op::Search
                     };
-                    push(&mut out, i + 3, format!("String.{f}"), op, None, &same);
+                    push(
+                        &mut out,
+                        i + 3,
+                        format!("String.{f}"),
+                        op,
+                        None,
+                        &same,
+                        None,
+                    );
                 }
             }
             Lang::Rust => {
@@ -302,6 +353,7 @@ pub fn extract(src: &str, lang: Lang) -> Vec<Found> {
                         Op::Search,
                         None,
                         &same,
+                        None,
                     );
                 }
                 if ident(i) == Some("RegexSet")
@@ -312,7 +364,15 @@ pub fn extract(src: &str, lang: Lang) -> Vec<Found> {
                     let mut j = i + 4;
                     while j < toks.len() && !punct(j, ')') {
                         if string(j).is_some() {
-                            push(&mut out, j, "RegexSet::new".into(), Op::Search, None, &same);
+                            push(
+                                &mut out,
+                                j,
+                                "RegexSet::new".into(),
+                                Op::Search,
+                                None,
+                                &same,
+                                None,
+                            );
                         }
                         j += 1;
                     }
@@ -323,6 +383,110 @@ pub fn extract(src: &str, lang: Lang) -> Vec<Found> {
     out.sort_by_key(|f| (f.line, f.col));
     out.dedup_by(|a, b| a.line == b.line && a.col == b.col);
     out
+}
+
+/// The string starting at token `j`, joined with adjacent (Python) or `+`-concatenated literals,
+/// and whether it is only part of the pattern (concatenated with or formatted by run-time values).
+fn literal(toks: &[T], j: usize, lang: Lang) -> Option<(String, bool)> {
+    let mut s = match &toks.get(j)?.tok {
+        Tok::Str(Some(s)) => s.clone(),
+        Tok::Str(None) => return Some((String::new(), true)),
+        _ => return None,
+    };
+    let mut k = j + 1;
+    loop {
+        match toks.get(k).map(|t| &t.tok) {
+            Some(Tok::Str(Some(t))) if lang == Lang::Python => {
+                s.push_str(t);
+                k += 1;
+            }
+            Some(Tok::Punct('+')) => match toks.get(k + 1).map(|t| &t.tok) {
+                Some(Tok::Str(Some(t))) => {
+                    s.push_str(t);
+                    k += 2;
+                }
+                _ => return Some((s, true)),
+            },
+            Some(Tok::Punct('%')) if lang == Lang::Python => return Some((s, true)),
+            Some(Tok::Punct('.')) => {
+                // `"...".format(...)`, `"...".formatted(...)`, `"..." .replace(...)`.
+                return Some((s, true));
+            }
+            Some(Tok::Str(None)) => return Some((s, true)),
+            _ => return Some((s, false)),
+        }
+    }
+}
+
+/// Inline flag letters for the call's flags argument (`pos`, 0-based, or the `flags=` keyword),
+/// or why it cannot be read statically. No flags argument → no letters.
+fn flags(toks: &[T], open: usize, pos: usize, lang: Lang) -> Result<String, String> {
+    // Top-level argument token ranges of the call.
+    let mut args: Vec<(usize, usize)> = Vec::new();
+    let (mut depth, mut start) = (0usize, open + 1);
+    let mut k = open;
+    while k < toks.len() {
+        match toks[k].tok {
+            Tok::Punct('(' | '[' | '{') => depth += 1,
+            Tok::Punct(')' | ']' | '}') => {
+                depth -= 1;
+                if depth == 0 {
+                    if k > start {
+                        args.push((start, k));
+                    }
+                    break;
+                }
+            }
+            Tok::Punct(',') if depth == 1 => {
+                args.push((start, k));
+                start = k + 1;
+            }
+            _ => {}
+        }
+        k += 1;
+    }
+    let is =
+        |i: usize, w: &str| matches!(toks.get(i).map(|t| &t.tok), Some(Tok::Ident(x)) if x == w);
+    let range = args
+        .iter()
+        .find(|(a, _)| {
+            is(*a, "flags") && matches!(toks.get(a + 1).map(|t| &t.tok), Some(Tok::Punct('=')))
+        })
+        .map(|(a, b)| (a + 2, *b))
+        .or_else(|| {
+            args.get(pos)
+                .filter(|(a, _)| !matches!(toks.get(a + 1).map(|t| &t.tok), Some(Tok::Punct('='))))
+                .copied()
+        });
+    let Some((a, b)) = range else {
+        return Ok(String::new());
+    };
+    let mut letters = String::new();
+    for t in &toks[a..b] {
+        let name = match &t.tok {
+            Tok::Ident(w) if w == "re" || w == "Pattern" => continue,
+            Tok::Punct('.' | '|' | '(' | ')') => continue,
+            Tok::Ident(w) if w == "0" => continue,
+            Tok::Ident(w) => w.as_str(),
+            _ => return Err("the flags argument is not a constant".into()),
+        };
+        let l = match (lang, name) {
+            (Lang::Python, "I" | "IGNORECASE") | (Lang::Java, "CASE_INSENSITIVE") => 'i',
+            (Lang::Python, "M" | "MULTILINE") | (Lang::Java, "MULTILINE") => 'm',
+            (Lang::Python, "S" | "DOTALL") | (Lang::Java, "DOTALL") => 's',
+            (Lang::Python, "X" | "VERBOSE") | (Lang::Java, "COMMENTS") => 'x',
+            (Lang::Python, "A" | "ASCII") => 'a',
+            (Lang::Python, "U" | "UNICODE") => continue,
+            (Lang::Java, "UNIX_LINES") => 'd',
+            (Lang::Java, "UNICODE_CASE") => 'u',
+            (Lang::Java, "UNICODE_CHARACTER_CLASS") => 'U',
+            _ => return Err(format!("flag {name} is not analysed")),
+        };
+        if !letters.contains(l) {
+            letters.push(l);
+        }
+    }
+    Ok(letters)
 }
 
 // ------------------------------------------------------------------ lexer
@@ -411,6 +575,14 @@ impl Lexer<'_> {
     }
 
     fn run(&mut self) {
+        // `#!/usr/bin/env node`: not a regex literal.
+        if self.peek(0) == Some('#') && self.peek(1) == Some('!') {
+            while let Some(c) = self.peek(0)
+                && c != '\n'
+            {
+                self.bump();
+            }
+        }
         while let Some(c) = self.peek(0) {
             let (line, col) = (self.line, self.col);
             if c.is_whitespace() {
@@ -900,7 +1072,12 @@ mod tests {
         let src = "import re\n# re.compile('not me')\nA = re.compile(r'^\\w+$')\nre.fullmatch(\"a\\\\d\", s)\nre.search('\\d', s)\nre.sub(f'{x}', '', s)\n";
         assert_eq!(
             pats(src, Lang::Python),
-            vec![("^\\w+$".into(), 3), ("a\\d".into(), 4), ("\\d".into(), 5)]
+            vec![
+                ("^\\w+$".into(), 3),
+                ("a\\d".into(), 4),
+                ("\\d".into(), 5),
+                ("".into(), 6)
+            ]
         );
         assert_eq!(extract(src, Lang::Python)[1].op, Op::FullMatch);
     }
@@ -946,6 +1123,34 @@ mod tests {
                 ("b".into(), 4)
             ]
         );
+    }
+
+    #[test]
+    fn concatenation_and_flags() {
+        let py = "re.compile(r'a' r'b')\nre.compile('(' + x + ')')\nre.compile('x', re.I | re.VERBOSE)\nre.sub('a', 'b', s, flags=re.M)\nre.search('y', s, FLAGS)\nre.compile('%s+' % x)\n";
+        let f = extract(py, Lang::Python);
+        let got: Vec<_> = f
+            .iter()
+            .map(|x| (x.pattern.as_str(), x.unsupported.is_some()))
+            .collect();
+        assert_eq!(
+            got,
+            [
+                ("ab", false),
+                ("(", true),
+                ("(?ix)x", false),
+                ("(?m)a", false),
+                ("y", true),
+                ("%s+", true)
+            ]
+        );
+        let java = "Pattern.compile(\"a\" + \"b\", Pattern.CASE_INSENSITIVE | Pattern.COMMENTS);\nPattern.compile(\"c\", Pattern.LITERAL);";
+        let j: Vec<_> = extract(java, Lang::Java)
+            .into_iter()
+            .map(|x| (x.pattern, x.unsupported.is_some()))
+            .collect();
+        assert_eq!(j, [("(?ix)ab".to_string(), false), ("c".to_string(), true)]);
+        assert!(extract("#!/usr/bin/env node\nconst a = 1;", Lang::JavaScript).is_empty());
     }
 
     #[test]
