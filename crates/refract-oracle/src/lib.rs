@@ -47,6 +47,18 @@ impl EngineKind {
     pub fn image(self) -> String {
         format!("refract-oracle-{}", self.name())
     }
+
+    /// Version prefix of the pinned engine the models were built from (`oracle/*/Dockerfile`):
+    /// CPython 3.15, V8 14.6 (Node 26), Go 1.27, JDK 25. A native engine of another version is
+    /// not ground truth: its regex features and Unicode tables differ.
+    pub fn pinned(self) -> &'static str {
+        match self {
+            EngineKind::Python => "3.15.",
+            EngineKind::Node => "14.6.",
+            EngineKind::Go => "go1.27",
+            EngineKind::Java => "25.",
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -237,6 +249,18 @@ impl Engine {
         };
         let v = engine.request(json!({"id": 0, "op": "version"}))?;
         engine.version = v["version"].as_str().unwrap_or("?").to_string();
+        if mode == Mode::Native && !engine.version.starts_with(kind.pinned()) {
+            // Dropping the engine stops the runner.
+            return Err(io::Error::other(format!(
+                "native {} reports version {}, but Refract's model is pinned to {}*; use the pinned \
+                 image (REFRACT_ORACLE=docker, docker build -t {} oracle/{})",
+                kind.name(),
+                engine.version,
+                kind.pinned(),
+                kind.image(),
+                kind.name()
+            )));
+        }
         Ok(engine)
     }
 
