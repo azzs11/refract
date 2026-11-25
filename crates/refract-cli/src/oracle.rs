@@ -151,17 +151,33 @@ impl Oracles {
         op: Op,
         input: &str,
     ) -> Result<bool, String> {
+        self.run_many(flavor, pattern, op, &[input])?
+            .first()
+            .copied()
+            .ok_or_else(|| "no result".to_string())
+    }
+
+    /// One pattern on many haystacks in one request.
+    pub fn run_many(
+        &mut self,
+        flavor: Flavor,
+        pattern: &str,
+        op: Op,
+        inputs: &[&str],
+    ) -> Result<Vec<bool>, String> {
         if flavor == Flavor::Rust {
             let compiled = match op {
                 Op::Search => regex::Regex::new(pattern),
                 Op::FullMatch => regex::Regex::new(&format!(r"\A(?:{pattern})\z")),
             };
-            return compiled.map(|r| r.is_match(input)).map_err(|e| {
-                format!(
-                    "rejected the pattern: {}",
-                    e.to_string().lines().last().unwrap_or("")
-                )
-            });
+            return compiled
+                .map(|r| inputs.iter().map(|i| r.is_match(i)).collect())
+                .map_err(|e| {
+                    format!(
+                        "rejected the pattern: {}",
+                        e.to_string().lines().last().unwrap_or("")
+                    )
+                });
         }
         let k = kind(flavor).ok_or_else(|| format!("no oracle for {flavor}"))?;
         let oop = match op {
@@ -171,12 +187,13 @@ impl Oracles {
         let engine = self.engine(k)?;
         let out = if flavor == Flavor::JavaScript {
             let (src, flags) = js_literal(pattern);
-            engine.run_with_flags(src, flags, oop, &[input])
+            engine.run_with_flags(src, flags, oop, inputs)
         } else {
-            engine.run(pattern, oop, &[input])
+            engine.run(pattern, oop, inputs)
         };
         match out.map_err(|e| e.to_string())? {
-            Outcome::Matched(v) => v.first().copied().ok_or_else(|| "no result".to_string()),
+            Outcome::Matched(v) if v.len() == inputs.len() => Ok(v),
+            Outcome::Matched(_) => Err("wrong number of results".to_string()),
             Outcome::Rejected(e) => Err(format!("rejected the pattern: {e}")),
         }
     }

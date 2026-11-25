@@ -11,6 +11,7 @@ use std::process::ExitCode;
 mod commands;
 mod oracle;
 mod redos;
+mod translate;
 
 #[derive(Parser)]
 #[command(
@@ -126,6 +127,39 @@ enum Command {
         json: bool,
         pattern: String,
     },
+    /// Translate a pattern into other flavours, prove each translation equivalent (full match
+    /// and search) and replay coverage strings on both real engines.
+    ///
+    /// Exit 0 when every translation is verified, 1 when one is not, 3 when an engine
+    /// contradicts the model.
+    Translate {
+        #[arg(long, short = 'f', default_value = "python")]
+        from: Flavor,
+        #[arg(long, value_delimiter = ',', default_value = "js,python,go,java,rust")]
+        to: Vec<Flavor>,
+        /// Preserve only this operation (default: both; falls back to full match when only
+        /// that has a form in the target).
+        #[arg(long)]
+        op: Option<Op>,
+        #[arg(long)]
+        json: bool,
+        pattern: String,
+    },
+    /// Generate test cases covering every state and transition of the minimal DFA, labelled by
+    /// the model and confirmed on the real engine.
+    Tests {
+        #[arg(long, short = 'f', default_value = "python")]
+        flavor: Flavor,
+        #[arg(long, default_value = "full")]
+        op: Op,
+        /// json, pytest, jest, junit or go.
+        #[arg(long, default_value = "json")]
+        format: translate::TestFormat,
+        /// Skip the real-engine replay.
+        #[arg(long)]
+        no_replay: bool,
+        pattern: String,
+    },
     /// List flavours and their semantics profiles.
     Flavors,
 }
@@ -199,6 +233,20 @@ fn run(cli: Cli) -> Result<ExitCode> {
             attack,
             json,
         ),
+        Command::Translate {
+            from,
+            to,
+            op,
+            json,
+            pattern,
+        } => translate::translate(from, &pattern, &to, op, json),
+        Command::Tests {
+            flavor,
+            op,
+            format,
+            no_replay,
+            pattern,
+        } => translate::tests(flavor, &pattern, op, format, no_replay),
         Command::Flavors => commands::flavors(),
     }
 }
