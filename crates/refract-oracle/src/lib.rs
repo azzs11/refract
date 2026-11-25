@@ -154,6 +154,23 @@ impl Engine {
                 EngineKind::Go | EngineKind::Java => unreachable!("docker-only engines"),
             },
             Mode::Docker => {
+                // Only a locally built image: a missing one would make `docker run` try a
+                // registry pull (slow, or a hang on Windows runners) for every spawn.
+                let present = Command::new("docker")
+                    .args(["image", "inspect", "--format", "{{.Id}}", &kind.image()])
+                    .stdin(Stdio::null())
+                    .stdout(Stdio::null())
+                    .stderr(Stdio::null())
+                    .status()
+                    .is_ok_and(|s| s.success());
+                if !present {
+                    return Err(io::Error::other(format!(
+                        "docker image {} is not built (docker build -t {} oracle/{})",
+                        kind.image(),
+                        kind.image(),
+                        kind.name()
+                    )));
+                }
                 let name = format!(
                     "refract-oracle-{}-{}-{}",
                     kind.name(),
@@ -161,7 +178,15 @@ impl Engine {
                     CONTAINERS.fetch_add(1, Ordering::Relaxed)
                 );
                 let mut c = Command::new("docker");
-                c.args(["run", "-i", "--rm", "--network=none", "--name", &name]);
+                c.args([
+                    "run",
+                    "-i",
+                    "--rm",
+                    "--pull=never",
+                    "--network=none",
+                    "--name",
+                    &name,
+                ]);
                 if engine_args.is_empty() {
                     c.arg(kind.image());
                 } else {

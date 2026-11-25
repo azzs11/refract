@@ -18,13 +18,20 @@ use std::sync::Mutex;
 
 static JAVA: Mutex<Option<Oracle>> = Mutex::new(None);
 
+/// Set once an engine failed to start: later cases skip at once instead of retrying.
+static UNAVAILABLE: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
 fn with_java<T>(f: impl FnOnce(&mut Oracle) -> T) -> Option<T> {
     let mut guard = JAVA.lock().unwrap_or_else(|e| e.into_inner());
+    if UNAVAILABLE.load(std::sync::atomic::Ordering::Relaxed) {
+        return None;
+    }
     if guard.is_none() {
         match Oracle::spawn(EngineKind::Java, Mode::from_env()) {
             Ok(e) => *guard = Some(e),
             Err(e) => {
                 eprintln!("skipping java oracle tests: {e}");
+                UNAVAILABLE.store(true, std::sync::atomic::Ordering::Relaxed);
                 return None;
             }
         }

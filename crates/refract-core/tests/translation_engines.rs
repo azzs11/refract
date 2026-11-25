@@ -14,8 +14,14 @@ use std::sync::Mutex;
 
 static ENGINES: Mutex<Option<(Oracle, Oracle)>> = Mutex::new(None);
 
+/// Set once an engine failed to start: later cases skip at once instead of retrying.
+static UNAVAILABLE: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
 fn with_engines<T>(f: impl FnOnce(&mut Oracle, &mut Oracle) -> T) -> Option<T> {
     let mut guard = ENGINES.lock().unwrap_or_else(|e| e.into_inner());
+    if UNAVAILABLE.load(std::sync::atomic::Ordering::Relaxed) {
+        return None;
+    }
     if guard.is_none() {
         match (
             Oracle::spawn(EngineKind::Python, Mode::from_env()),
@@ -24,6 +30,7 @@ fn with_engines<T>(f: impl FnOnce(&mut Oracle, &mut Oracle) -> T) -> Option<T> {
             (Ok(p), Ok(n)) => *guard = Some((p, n)),
             _ => {
                 eprintln!("skipping: python3 and node are needed");
+                UNAVAILABLE.store(true, std::sync::atomic::Ordering::Relaxed);
                 return None;
             }
         }
