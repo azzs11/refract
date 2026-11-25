@@ -805,7 +805,7 @@ fn analyse_with(re: &Regex, op: Op, budget: &Budget, java_memo: bool) -> Result<
         cands = scored.into_iter().map(|(_, c)| c).collect();
     }
     let cache: DfaCache = std::cell::RefCell::new(HashMap::new());
-    let searching_since = std::time::Instant::now();
+    let searching_since = web_time::Instant::now();
     let mut tried: std::collections::HashSet<(String, Vec<String>)> = Default::default();
     for (growth, pivot, mut pumps, why) in cands.into_iter().take(MAX_CANDIDATES) {
         budget.check_time()?;

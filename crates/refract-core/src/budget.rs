@@ -2,7 +2,8 @@
 //! [`ErrorKind::Budget`](crate::error::ErrorKind::Budget) error naming the limit it hit.
 
 use crate::error::{Error, Result};
-use std::time::{Duration, Instant};
+use std::time::Duration;
+use web_time::Instant;
 
 /// Limits for one analysis run.
 #[derive(Clone, Debug)]

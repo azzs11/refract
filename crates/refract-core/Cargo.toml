@@ -13,6 +13,8 @@ workspace = true
 [dependencies]
 regex-syntax = "0.8.12"
 thiserror = "2.0.21"
+# std::time::Instant panics on wasm32-unknown-unknown; web-time re-exports std elsewhere.
+web-time = "1.1.0"
 
 [dev-dependencies]
 proptest = "1.12.0"
