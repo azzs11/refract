@@ -17,6 +17,7 @@ pub mod deriv;
 pub mod dfa;
 pub mod equiv;
 pub mod error;
+pub mod extract;
 pub mod flavor;
 pub mod interp;
 pub mod ir;
