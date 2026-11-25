@@ -21,7 +21,7 @@ inputs:
     description: Predict ReDoS (true/false).
     default: "true"
   version:
-    description: Git ref of Refract to install (tag, branch or SHA). Ignored when `source` is `local`.
+    description: Refract release tag (prebuilt binary, e.g. v0.5.0) or any git ref (built from source). Ignored when `source` is `local`.
     default: main
   source:
     description: "`git` installs from github.com/azzs11/refract; `local` builds the checked-out repository (for Refract's own CI)."
@@ -44,7 +44,24 @@ runs:
       run: |
         if [ "$SOURCE" = local ]; then
           cargo install --locked --path crates/refract-cli
-        elif ! command -v refract >/dev/null; then
+          exit 0
+        fi
+        command -v refract >/dev/null && exit 0
+        # A release tag has prebuilt binaries; anything else is built from source.
+        case "$RUNNER_OS-$RUNNER_ARCH" in
+          Linux-X64) target=x86_64-unknown-linux-gnu ;;
+          Linux-ARM64) target=aarch64-unknown-linux-gnu ;;
+          macOS-ARM64) target=aarch64-apple-darwin ;;
+          macOS-X64) target=x86_64-apple-darwin ;;
+          *) target= ;;
+        esac
+        url="https://github.com/azzs11/refract/releases/download/$VERSION/refract-$VERSION-$target.tar.gz"
+        if [ -n "$target" ] && curl -fsSL "$url" -o /tmp/refract.tar.gz; then
+          tar xzf /tmp/refract.tar.gz -C /tmp
+          mkdir -p "$HOME/.cargo/bin"
+          cp "/tmp/refract-$VERSION-$target/refract" "$HOME/.cargo/bin/"
+          echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+        else
           cargo install --locked --git https://github.com/azzs11/refract --rev "$VERSION" refract-cli
         fi
     - name: refract check
