@@ -9,9 +9,9 @@ mod common;
 
 use common::cases;
 use proptest::prelude::*;
-use refract_core::equiv::escape;
-use refract_core::{Budget, Flavor, Op, parse};
 use refract_oracle::{Engine as Oracle, EngineKind, Mode, Op as OOp, Outcome};
+use refract_regex::equiv::escape;
+use refract_regex::{Budget, Flavor, Op, parse};
 use std::sync::Mutex;
 
 static JS: Mutex<Option<Oracle>> = Mutex::new(None);
@@ -214,7 +214,7 @@ proptest! {
             // the non-regular ones the automata refuse.
             interp_check(&ir, op, oop, &hay)?;
             // Exact for every flag set, astral haystacks included (UTF-16 lifting, ADR-0007).
-            let Ok(m) = refract_core::automata::regex_dfa(&ir, op, &budget) else { continue };
+            let Ok(m) = refract_regex::automata::regex_dfa(&ir, op, &budget) else { continue };
             let Some(out) = with_node(|js| js.run_with_flags(&src, flags, oop, &hay_refs)) else {
                 return Ok(());
             };
@@ -387,14 +387,14 @@ fn known_cases() {
 
 /// The interpreter's verdicts versus the real engine on the same haystacks.
 fn interp_check(
-    ir: &refract_core::Regex,
+    ir: &refract_regex::Regex,
     op: Op,
     oop: OOp,
     hay: &[String],
 ) -> Result<(), TestCaseError> {
     let mut mine = Vec::new();
     for h in hay {
-        match refract_core::interp::is_match(ir, op, h, 200_000) {
+        match refract_regex::interp::is_match(ir, op, h, 200_000) {
             Ok(b) => mine.push(Some(b)),
             Err(_) => mine.push(None), // step limit: no prediction
         }

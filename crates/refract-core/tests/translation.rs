@@ -6,9 +6,9 @@ mod common;
 
 use common::cases;
 use proptest::prelude::*;
-use refract_core::equiv::Verdict;
-use refract_core::translate::{Outcome, translate};
-use refract_core::{Budget, Flavor, parse};
+use refract_regex::equiv::Verdict;
+use refract_regex::translate::{Outcome, translate};
+use refract_regex::{Budget, Flavor, parse};
 
 const TOKENS: &[&str] = &[
     "a", "b", "é", "K", "ß", "1", "😀", " ", "/", "-", ".", "^", "$", "|", "(", ")", "(?:", "(?i)",
@@ -53,7 +53,7 @@ proptest! {
                     let quirk = src.quirks.mid_pair_search
                         || parse(to, &text).is_ok_and(|d| d.quirks.mid_pair_search);
                     for c in checks {
-                        if quirk && c.op == refract_core::Op::Search {
+                        if quirk && c.op == refract_regex::Op::Search {
                             continue;
                         }
                         if let Verdict::Different(w) = c.verdict {

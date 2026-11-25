@@ -1,10 +1,14 @@
 [package]
 name = "refract-oracle"
+description = "Run regexes on real engines (CPython, V8, Go, the JDK) over a JSON-lines protocol, natively or in pinned Docker images"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
 rust-version.workspace = true
+keywords.workspace = true
+categories.workspace = true
+readme = "../../README.md"
 
 [dependencies]
 serde_json = "1.0.154"

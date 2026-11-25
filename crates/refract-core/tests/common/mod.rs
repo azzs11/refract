@@ -2,7 +2,7 @@
 #![allow(dead_code)]
 
 use proptest::prelude::*;
-use refract_core::{CharSet, Re};
+use refract_regex::{CharSet, Re};
 
 /// Case count: `PROPTEST_CASES` when set, else `default`.
 pub fn cases(default: u32) -> u32 {

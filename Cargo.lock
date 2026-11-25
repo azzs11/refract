@@ -487,20 +487,27 @@ dependencies = [
 
 [[package]]
 name = "refract-cli"
-version = "0.1.0"
+version = "0.5.0"
 dependencies = [
  "anyhow",
  "clap",
  "insta",
- "refract-core",
  "refract-oracle",
+ "refract-regex",
  "regex",
  "serde_json",
 ]
 
 [[package]]
-name = "refract-core"
-version = "0.1.0"
+name = "refract-oracle"
+version = "0.5.0"
+dependencies = [
+ "serde_json",
+]
+
+[[package]]
+name = "refract-regex"
+version = "0.5.0"
 dependencies = [
  "proptest",
  "refract-oracle",
@@ -511,17 +518,10 @@ dependencies = [
 ]
 
 [[package]]
-name = "refract-oracle"
-version = "0.1.0"
-dependencies = [
- "serde_json",
-]
-
-[[package]]
 name = "refract-wasm"
-version = "0.1.0"
+version = "0.5.0"
 dependencies = [
- "refract-core",
+ "refract-regex",
  "serde_json",
  "wasm-bindgen",
 ]

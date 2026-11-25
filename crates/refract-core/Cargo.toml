@@ -1,11 +1,18 @@
 [package]
-name = "refract-core"
-description = "Refract core: regex flavour parsers, char-set algebra, symbolic automata and equivalence"
+name = "refract-regex"
+description = "One regex across JavaScript, Python, Go, Java and Rust: flavour parsers, symbolic automata, equivalence with shortest witnesses, ReDoS prediction and verified translation"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
 rust-version.workspace = true
+keywords.workspace = true
+categories.workspace = true
+readme = "../../README.md"
+
+[lib]
+# The directory and the workspace keep the name refract-core; crates.io has `refract-regex`.
+name = "refract_regex"
 
 [lints]
 workspace = true

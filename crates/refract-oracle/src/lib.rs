@@ -19,8 +19,8 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError};
 use std::time::Duration;
 
-const PYTHON_RUNNER: &str = include_str!("../../../oracle/python/runner.py");
-const NODE_RUNNER: &str = include_str!("../../../oracle/node/runner.mjs");
+const PYTHON_RUNNER: &str = include_str!("../runners/runner.py");
+const NODE_RUNNER: &str = include_str!("../runners/runner.mjs");
 
 /// Engines with an external runner.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]

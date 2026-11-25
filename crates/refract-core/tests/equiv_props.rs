@@ -6,9 +6,9 @@ mod common;
 
 use common::{arb_re, cases};
 use proptest::prelude::*;
-use refract_core::automata::alphabet_for;
-use refract_core::equiv::{Side, Verdict, equivalent};
-use refract_core::{Budget, Engine, ErrorKind, Re};
+use refract_regex::automata::alphabet_for;
+use refract_regex::equiv::{Side, Verdict, equivalent};
+use refract_regex::{Budget, Engine, ErrorKind, Re};
 
 /// All strings over the minterm representatives of `a` and `b`, up to `max_len`. Every string
 /// is equivalent (class by class) to one of these, so this search is complete for that length.

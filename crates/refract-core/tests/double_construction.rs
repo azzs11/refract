@@ -5,9 +5,9 @@ mod common;
 
 use common::{arb_input, arb_re, cases};
 use proptest::prelude::*;
-use refract_core::automata::{alphabet_for, dfa};
-use refract_core::minimize::{brzozowski, hopcroft};
-use refract_core::{Budget, Engine, ErrorKind, Re};
+use refract_regex::automata::{alphabet_for, dfa};
+use refract_regex::minimize::{brzozowski, hopcroft};
+use refract_regex::{Budget, Engine, ErrorKind, Re};
 
 proptest! {
     #![proptest_config(ProptestConfig::with_cases(cases(5_000)))]
@@ -61,8 +61,8 @@ proptest! {
         prop_assert!(m.len() <= d.trim().len());
         for p in 0..m.len() {
             for q in (p + 1)..m.len() {
-                let a = refract_core::Dfa { start: p, ..m.clone() };
-                let b = refract_core::Dfa { start: q, ..m.clone() };
+                let a = refract_regex::Dfa { start: p, ..m.clone() };
+                let b = refract_regex::Dfa { start: q, ..m.clone() };
                 let x = a.product(&b, |x, y| x != y, &budget).unwrap();
                 prop_assert!(!x.is_empty_language(), "states {} and {} are equivalent in {}", p, q, re);
             }

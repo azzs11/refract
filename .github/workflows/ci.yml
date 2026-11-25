@@ -104,9 +104,9 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - name: Double construction, 1M random regexes
-        run: PROPTEST_CASES=1000000 cargo test --release -p refract-core --test double_construction engines_and_minimisers_agree
+        run: PROPTEST_CASES=1000000 cargo test --release -p refract-regex --test double_construction engines_and_minimisers_agree
       - name: Witness validity and real-engine agreement, 200k cases
-        run: PROPTEST_CASES=200000 cargo test --release -p refract-core --test equiv_props --test rust_oracle --test rust_differential
+        run: PROPTEST_CASES=200000 cargo test --release -p refract-regex --test equiv_props --test rust_oracle --test rust_differential
 
   oracles:
     name: real-engine oracles (Python, JS, Go, Java)
@@ -122,7 +122,7 @@ jobs:
       - name: Oracle suites (Docker engines)
         env:
           REFRACT_ORACLE: docker
-        run: cargo test --release -p refract-core --test python_oracle --test js_oracle --test go_oracle --test java_oracle
+        run: cargo test --release -p refract-regex --test python_oracle --test js_oracle --test go_oracle --test java_oracle
 
   fuzz:
     name: fuzz parser (nightly, 1 h)

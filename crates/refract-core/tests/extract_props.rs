@@ -2,7 +2,7 @@
 //! surrounds it (plan §8 totality).
 
 use proptest::prelude::*;
-use refract_core::extract::{Lang, extract};
+use refract_regex::extract::{Lang, extract};
 
 const LANGS: [Lang; 5] = [
     Lang::Python,

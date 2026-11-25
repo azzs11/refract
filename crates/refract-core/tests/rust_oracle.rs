@@ -11,9 +11,9 @@ mod common;
 
 use common::cases;
 use proptest::prelude::*;
-use refract_core::automata::{alphabet_for, dfa};
-use refract_core::equiv::{Verdict, equivalent, escape};
-use refract_core::{Budget, CharSet, Engine, Flavor, Op, Re, parse, regular::lower};
+use refract_regex::automata::{alphabet_for, dfa};
+use refract_regex::equiv::{Verdict, equivalent, escape};
+use refract_regex::{Budget, CharSet, Engine, Flavor, Op, Re, parse, regular::lower};
 use regex_syntax::hir::{Class, Hir, HirKind};
 
 const TOKENS: &[&str] = &[

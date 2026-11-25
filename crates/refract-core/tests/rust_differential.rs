@@ -7,7 +7,7 @@
 //! Language-level agreement for whole patterns is checked in `equiv_oracle.rs` (P2).
 
 use proptest::prelude::*;
-use refract_core::{CharSet, Flavor, ir::NodeKind, parse};
+use refract_regex::{CharSet, Flavor, ir::NodeKind, parse};
 use regex_syntax::hir::{Class, HirKind};
 
 const TOKENS: &[&str] = &[

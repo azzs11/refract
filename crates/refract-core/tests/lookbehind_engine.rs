@@ -6,10 +6,10 @@ mod common;
 
 use common::{arb_input, arb_re_with_behind, cases};
 use proptest::prelude::*;
-use refract_core::automata::{alphabet_for, dfa};
-use refract_core::equiv::{Side, Verdict, equivalent};
-use refract_core::minimize::hopcroft;
-use refract_core::{Budget, Engine, ErrorKind};
+use refract_regex::automata::{alphabet_for, dfa};
+use refract_regex::equiv::{Side, Verdict, equivalent};
+use refract_regex::minimize::hopcroft;
+use refract_regex::{Budget, Engine, ErrorKind};
 
 proptest! {
     #![proptest_config(ProptestConfig::with_cases(cases(5_000)))]
@@ -57,7 +57,7 @@ proptest! {
         guard in arb_re_with_behind(),
         inputs in prop::collection::vec(arb_input(), 1..10),
     ) {
-        use refract_core::Re;
+        use refract_regex::Re;
         // r constrained by a look-ahead on the rest of the input: (rΣ* ∩ guardΣ*) style.
         let step = Re::And(vec![
             Re::Concat(vec![r.clone(), Re::Var(0)]),

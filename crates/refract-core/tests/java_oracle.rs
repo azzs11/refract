@@ -10,10 +10,10 @@ mod common;
 
 use common::cases;
 use proptest::prelude::*;
-use refract_core::automata::{alphabet_for, dfa};
-use refract_core::equiv::escape;
-use refract_core::{Budget, Engine, Flavor, Op, parse, regular::lower};
 use refract_oracle::{Engine as Oracle, EngineKind, Mode, Op as OOp, Outcome};
+use refract_regex::automata::{alphabet_for, dfa};
+use refract_regex::equiv::escape;
+use refract_regex::{Budget, Engine, Flavor, Op, parse, regular::lower};
 use std::sync::Mutex;
 
 static JAVA: Mutex<Option<Oracle>> = Mutex::new(None);
@@ -344,14 +344,14 @@ fn known_cases() {
 
 /// The interpreter's verdicts versus the real engine on the same haystacks.
 fn interp_check(
-    ir: &refract_core::Regex,
+    ir: &refract_regex::Regex,
     op: Op,
     oop: OOp,
     hay: &[String],
 ) -> Result<(), TestCaseError> {
     let mut mine = Vec::new();
     for h in hay {
-        match refract_core::interp::is_match(ir, op, h, 200_000) {
+        match refract_regex::interp::is_match(ir, op, h, 200_000) {
             Ok(b) => mine.push(Some(b)),
             Err(_) => mine.push(None), // step limit: no prediction
         }

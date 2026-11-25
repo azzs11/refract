@@ -6,8 +6,8 @@ mod common;
 
 use common::{arb_re, cases};
 use proptest::prelude::*;
-use refract_core::automata::{alphabet_for, minimal_dfa};
-use refract_core::{Budget, Engine, ErrorKind, Re};
+use refract_regex::automata::{alphabet_for, minimal_dfa};
+use refract_regex::{Budget, Engine, ErrorKind, Re};
 
 fn same(a: &Re, b: &Re) -> Result<bool, TestCaseError> {
     let budget = Budget::small().start();

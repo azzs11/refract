@@ -9,7 +9,7 @@ cargo-fuzz = true
 
 [dependencies]
 libfuzzer-sys = "0.4"
-refract-core = { path = "../crates/refract-core" }
+refract-core = { package = "refract-regex", path = "../crates/refract-core" }
 
 # Kept out of the main workspace: cargo-fuzz needs nightly.
 [workspace]

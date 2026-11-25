@@ -6,10 +6,10 @@ mod common;
 
 use common::cases;
 use proptest::prelude::*;
-use refract_core::testgen::cover;
-use refract_core::translate::{Outcome, translate};
-use refract_core::{Budget, Flavor, Op, parse};
 use refract_oracle::{Engine as Oracle, EngineKind, Mode, Op as OOp, Outcome as Got};
+use refract_regex::testgen::cover;
+use refract_regex::translate::{Outcome, translate};
+use refract_regex::{Budget, Flavor, Op, parse};
 use std::sync::Mutex;
 
 static ENGINES: Mutex<Option<(Oracle, Oracle)>> = Mutex::new(None);

@@ -6,8 +6,8 @@ mod common;
 
 use proptest::strategy::{Strategy, ValueTree};
 use proptest::test_runner::{Config, RngAlgorithm, TestRng, TestRunner};
-use refract_core::automata::{alphabet_for, dfa};
-use refract_core::{Budget, Engine, Flavor, Op, parse, regular::lower};
+use refract_regex::automata::{alphabet_for, dfa};
+use refract_regex::{Budget, Engine, Flavor, Op, parse, regular::lower};
 
 fn runner() -> TestRunner {
     TestRunner::new_with_rng(
