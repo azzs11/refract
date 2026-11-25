@@ -50,7 +50,11 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.target }}
-          path: refract-*.*
+          # The archives only (the staging directory's name also contains dots).
+          path: |
+            refract-*.tar.gz
+            refract-*.zip
+          if-no-files-found: error
 
   release:
     name: GitHub release
@@ -69,8 +73,12 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          cd dist && sha256sum refract-* > SHA256SUMS && cd ..
-          gh release create "$GITHUB_REF_NAME" dist/* --title "Refract $GITHUB_REF_NAME" --notes-file CHANGELOG.md --verify-tag
+          ls -l dist
+          (cd dist && sha256sum refract-*.tar.gz refract-*.zip > SHA256SUMS)
+          # Release notes: this version's section of the changelog.
+          awk -v v="${GITHUB_REF_NAME#v}" '/^## \[/{ if (p) exit; if (index($0, "[" v "]")) p = 1 } p' CHANGELOG.md > notes.md
+          test -s notes.md || echo "See CHANGELOG.md." > notes.md
+          gh release create "$GITHUB_REF_NAME" dist/* --title "Refract $GITHUB_REF_NAME" --notes-file notes.md --verify-tag
 
   web:
     name: web app → GitHub Pages

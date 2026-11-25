@@ -98,12 +98,17 @@ fn backreferences_are_bounded() {
 /// Cross-engine report, Python source vs Rust (in-process), when python3 is installed.
 #[test]
 fn refract_python_vs_rust() {
-    if std::process::Command::new("python3")
-        .arg("-V")
-        .output()
-        .is_err()
-    {
-        eprintln!("skipping: python3 not available");
+    // Confirmation needs the pinned CPython (3.15): a native python3 of another version is
+    // refused by the oracle, and without the Docker image the verdict is only "predicted".
+    let pinned = std::process::Command::new("python3")
+        .args([
+            "-c",
+            "import sys; sys.exit(sys.version_info[:2] != (3, 15))",
+        ])
+        .status()
+        .is_ok_and(|s| s.success());
+    if !pinned {
+        eprintln!("skipping: CPython 3.15 (the pinned engine) not available");
         return;
     }
     let (code, out) = refract(&[
