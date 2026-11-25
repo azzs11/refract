@@ -1,0 +1,322 @@
+{
+ "patterns": 2293,
+ "corpus_sources": [
+  "CPython 3.15.2 standard library",
+  "OpenJDK jdk-25-ga, src/*/share/classes",
+  "crates in the local cargo registry (dependencies of this workspace and its tools)",
+  "go version go1.27.4 linux/arm64 standard library",
+  "npm packages installed by bench/redos/package-lock.json",
+  "npm packages installed by web/package-lock.json"
+ ],
+ "per_source": {
+  "python": {
+   "patterns": 405,
+   "analysed": 405,
+   "same everywhere": 143,
+   "disagrees somewhere": 262,
+   "differs somewhere": 181,
+   "rejected somewhere": 113,
+   "not analysed somewhere": 3
+  },
+  "js": {
+   "patterns": 1566,
+   "analysed": 1566,
+   "disagrees somewhere": 1061,
+   "rejected somewhere": 202,
+   "differs somewhere": 947,
+   "same everywhere": 473,
+   "not analysed somewhere": 41
+  },
+  "go": {
+   "patterns": 36,
+   "analysed": 36,
+   "disagrees somewhere": 22,
+   "differs somewhere": 22,
+   "same everywhere": 14
+  },
+  "java": {
+   "patterns": 270,
+   "analysed": 270,
+   "same everywhere": 159,
+   "disagrees somewhere": 111,
+   "differs somewhere": 104,
+   "rejected somewhere": 31
+  },
+  "rust": {
+   "patterns": 16,
+   "analysed": 16,
+   "same everywhere": 9,
+   "disagrees somewhere": 7,
+   "differs somewhere": 7
+  }
+ },
+ "total": {
+  "patterns": 2293,
+  "analysed": 2293,
+  "same everywhere": 798,
+  "disagrees somewhere": 1463,
+  "differs somewhere": 1261,
+  "rejected somewhere": 346,
+  "not analysed somewhere": 44
+ },
+ "pairs": {
+  "go->java": {
+   "DIFFERS": 15,
+   "SAME": 21
+  },
+  "go->js": {
+   "DIFFERS": 8,
+   "SAME": 28
+  },
+  "go->python": {
+   "DIFFERS": 22,
+   "SAME": 14
+  },
+  "go->rust": {
+   "DIFFERS": 13,
+   "SAME": 23
+  },
+  "java->go": {
+   "SAME": 173,
+   "DIFFERS": 76,
+   "REJECTS": 21
+  },
+  "java->js": {
+   "SAME": 179,
+   "DIFFERS": 86,
+   "SAME-bounded": 2,
+   "REJECTS": 3
+  },
+  "java->python": {
+   "SAME": 162,
+   "DIFFERS": 83,
+   "REJECTS": 23,
+   "SAME-bounded": 2
+  },
+  "java->rust": {
+   "SAME": 166,
+   "DIFFERS": 87,
+   "REJECTS": 17
+  },
+  "js->go": {
+   "REJECTS": 147,
+   "SAME": 921,
+   "DIFFERS": 466,
+   "NOT": 32
+  },
+  "js->java": {
+   "SAME": 662,
+   "DIFFERS": 797,
+   "REJECTS": 64,
+   "SAME-bounded": 2,
+   "NOT": 41
+  },
+  "js->python": {
+   "SAME": 578,
+   "DIFFERS": 933,
+   "REJECTS": 14,
+   "SAME-bounded": 1,
+   "NOT": 40
+  },
+  "js->rust": {
+   "SAME": 735,
+   "REJECTS": 140,
+   "DIFFERS": 659,
+   "NOT": 32
+  },
+  "python->go": {
+   "SAME": 184,
+   "DIFFERS": 135,
+   "REJECTS": 86
+  },
+  "python->java": {
+   "SAME": 156,
+   "DIFFERS": 164,
+   "REJECTS": 81,
+   "NOT": 3,
+   "SAME-bounded": 1
+  },
+  "python->js": {
+   "SAME": 155,
+   "DIFFERS": 157,
+   "REJECTS": 92,
+   "SAME-bounded": 1
+  },
+  "python->rust": {
+   "SAME": 189,
+   "DIFFERS": 145,
+   "REJECTS": 71
+  },
+  "rust->go": {
+   "SAME": 15,
+   "DIFFERS": 1
+  },
+  "rust->java": {
+   "SAME": 9,
+   "DIFFERS": 7
+  },
+  "rust->js": {
+   "SAME": 13,
+   "DIFFERS": 3
+  },
+  "rust->python": {
+   "SAME": 9,
+   "DIFFERS": 7
+  }
+ },
+ "difference_categories": {
+  "ASCII-only witness (syntax read differently)": 664,
+  "line terminators (`$`, `.`, `^` in multiline)": 1593,
+  "non-ASCII characters (Unicode classes, case folding)": 1607
+ },
+ "rejection_reasons": {
+  "go: invalid or unsupported Perl syntax": 142,
+  "js: Invalid group": 91,
+  "go: invalid escape sequence": 84,
+  "rust: look-around is not supported by the Rust regex engine": 74,
+  "java: Unknown inline modifier": 70,
+  "rust: unclosed character class": 53,
+  "java: Unclosed character class": 53,
+  "rust: unrecognized flag `a`": 34,
+  "rust: backreferences are not supported by the Rust regex engine": 15,
+  "go: invalid character class range": 15,
+  "rust: hexadecimal escape is not a Unicode scalar value": 12,
+  "rust: look-behind is not supported by the Rust regex engine": 11,
+  "python: bad escape \\p": 10,
+  "go: invalid named capture": 8,
+  "java: Illegal repetition": 8,
+  "python: bad character range": 7,
+  "java: Illegal octal escape sequence": 5,
+  "java: Illegal/unsupported escape sequence": 4,
+  "js: Nothing to repeat": 4,
+  "rust: repetition operator missing expression": 4,
+  "java: Illegal character range": 4,
+  "go: invalid nested repetition operator": 3,
+  "python: unterminated character set": 3,
+  "rust: invalid range boundary: both ends must be literal characters": 3,
+  "rust: repetition quantifier expects a valid decimal": 3,
+  "python: unknown extension ?<p": 3,
+  "python: unknown extension ?<t": 3,
+  "rust: unknown Unicode property or value `javaWhitespace`": 3,
+  "rust: unrecognized flag `P`": 2,
+  "rust: assertions are not allowed inside a character class": 2,
+  "rust: unrecognized escape sequence `\\Z`": 2,
+  "go: missing closing ]": 2,
+  "rust: unclosed counted repetition": 2,
+  "python: unknown extension ?<i": 2,
+  "rust: unknown Unicode property or value `Alnum`": 2,
+  "java: Unclosed counted closure": 1,
+  "python: unknown extension ?<c": 1,
+  "python: unknown extension ?<m": 1,
+  "rust: unknown Unicode property or value `javaDigit`": 1,
+  "rust: unknown Unicode property or value `Print`": 1,
+  "python: unknown extension ?<d": 1,
+  "python: bad escape \\R": 1,
+  "rust: unrecognized escape sequence `\\R`": 1,
+  "python: bad escape \\P": 1,
+  "rust: unknown Unicode property or value `all`": 1,
+  "python: unknown extension ?<s": 1,
+  "python: unknown extension ?<k": 1,
+  "python: unknown extension ?<n": 1,
+  "python: bad escape \\h": 1,
+  "rust: unrecognized escape sequence `\\h`": 1,
+  "rust: unknown Unicode property or value `javaJavaIdentifierStart`": 1
+ },
+ "replay": {
+  "differs confirmed": 3864,
+  "rejects confirmed": 759
+ },
+ "contradictions": [],
+ "examples": {
+  "ASCII-only witness (syntax read differently)": [
+   {
+    "pattern": "--\\s*>",
+    "from": "python",
+    "to": "js",
+    "witness": "\"--\\u{1C}>\"",
+    "source_matches": "matches"
+   },
+   {
+    "pattern": "]\\s*]\\s*>",
+    "from": "python",
+    "to": "js",
+    "witness": "\"]]\\u{1C}>\"",
+    "source_matches": "matches"
+   },
+   {
+    "pattern": "]\\s*>",
+    "from": "python",
+    "to": "js",
+    "witness": "\"]\\u{1C}>\"",
+    "source_matches": "matches"
+   },
+   {
+    "pattern": "-isysroot\\s*\\S+",
+    "from": "python",
+    "to": "js",
+    "witness": "\"-isysroot\\u{1C}\"",
+    "source_matches": "no match"
+   }
+  ],
+  "line terminators (`$`, `.`, `^` in multiline)": [
+   {
+    "pattern": "50*$",
+    "from": "python",
+    "to": "js",
+    "witness": "\"5\\n\"",
+    "source_matches": "matches"
+   },
+   {
+    "pattern": "idlelib\\..+",
+    "from": "python",
+    "to": "js",
+    "witness": "\"idlelib.\\r\"",
+    "source_matches": "matches"
+   },
+   {
+    "pattern": "test\\..+",
+    "from": "python",
+    "to": "js",
+    "witness": "\"test.\\r\"",
+    "source_matches": "matches"
+   },
+   {
+    "pattern": ".+\\.__main__",
+    "from": "python",
+    "to": "js",
+    "witness": "\"\\r.__main__\"",
+    "source_matches": "matches"
+   }
+  ],
+  "non-ASCII characters (Unicode classes, case folding)": [
+   {
+    "pattern": "%p(\\d)%\\{(\\d+)\\}%\\+%d",
+    "from": "python",
+    "to": "js",
+    "witness": "\"%p0%{٠}%+%d\"",
+    "source_matches": "matches"
+   },
+   {
+    "pattern": "\\d",
+    "from": "python",
+    "to": "js",
+    "witness": "\"٠\"",
+    "source_matches": "matches"
+   },
+   {
+    "pattern": "^\\s*(\\w+(?:\\s*\\.\\s*\\w+)*)",
+    "from": "python",
+    "to": "js",
+    "witness": "\"ª\"",
+    "source_matches": "matches"
+   },
+   {
+    "pattern": "(^|.*:)\\s*\\w*(\"|\\')",
+    "from": "python",
+    "to": "js",
+    "witness": "\"ª\\\"\"",
+    "source_matches": "matches"
+   }
+  ]
+ }
+}
