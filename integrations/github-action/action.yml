@@ -1,0 +1,62 @@
+name: Refract check
+description: >-
+  Find regexes in your code that the engine rejects, that backtrack super-linearly (ReDoS), or
+  that mean something else in another engine — with the shortest witness, as PR annotations.
+author: Refract
+branding:
+  icon: triangle
+  color: orange
+
+inputs:
+  paths:
+    description: Files or directories to scan (space-separated).
+    default: "."
+  targets:
+    description: Also report meaning changes in these engines (comma-separated, e.g. "js,go").
+    default: ""
+  fail-on:
+    description: "Fail the step at this severity: error, warning, note or never."
+    default: warning
+  redos:
+    description: Predict ReDoS (true/false).
+    default: "true"
+  version:
+    description: Git ref of Refract to install (tag, branch or SHA). Ignored when `source` is `local`.
+    default: main
+  source:
+    description: "`git` installs from github.com/azzs11/refract; `local` builds the checked-out repository (for Refract's own CI)."
+    default: git
+
+runs:
+  using: composite
+  steps:
+    - name: Cache the refract binary
+      if: inputs.source == 'git'
+      uses: actions/cache@v4
+      with:
+        path: ~/.cargo/bin/refract
+        key: refract-${{ runner.os }}-${{ inputs.version }}
+    - name: Install refract
+      shell: bash
+      env:
+        SOURCE: ${{ inputs.source }}
+        VERSION: ${{ inputs.version }}
+      run: |
+        if [ "$SOURCE" = local ]; then
+          cargo install --locked --path crates/refract-cli
+        elif ! command -v refract >/dev/null; then
+          cargo install --locked --git https://github.com/azzs11/refract --rev "$VERSION" refract-cli
+        fi
+    - name: refract check
+      shell: bash
+      env:
+        PATHS: ${{ inputs.paths }}
+        TARGETS: ${{ inputs.targets }}
+        FAIL_ON: ${{ inputs.fail-on }}
+        REDOS: ${{ inputs.redos }}
+      run: |
+        args=(--format github --fail-on "$FAIL_ON")
+        [ -n "$TARGETS" ] && args+=(--targets "$TARGETS")
+        [ "$REDOS" = false ] && args+=(--no-redos)
+        # shellcheck disable=SC2086 # paths are space-separated on purpose
+        refract check "${args[@]}" $PATHS

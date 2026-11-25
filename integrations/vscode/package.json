@@ -1,0 +1,29 @@
+{
+  "name": "refract-regex",
+  "displayName": "Refract — regex across engines",
+  "description": "Diagnostics for regexes: rejected patterns, predicted ReDoS, and where a pattern means something else in another engine (shortest witness).",
+  "version": "0.1.0",
+  "publisher": "refract",
+  "license": "MIT OR Apache-2.0",
+  "private": true,
+  "engines": { "vscode": "^1.90.0" },
+  "categories": ["Linters"],
+  "main": "./extension.js",
+  "activationEvents": [
+    "onLanguage:python", "onLanguage:javascript", "onLanguage:typescript",
+    "onLanguage:javascriptreact", "onLanguage:typescriptreact", "onLanguage:go",
+    "onLanguage:java", "onLanguage:rust"
+  ],
+  "contributes": {
+    "commands": [{ "command": "refract.checkFile", "title": "Refract: Check regexes in this file" }],
+    "configuration": {
+      "title": "Refract",
+      "properties": {
+        "refract.path": { "type": "string", "default": "refract", "description": "The refract binary (cargo install refract-cli)." },
+        "refract.targets": { "type": "array", "items": { "enum": ["js", "python", "go", "java", "rust"] }, "default": [], "description": "Also report where patterns mean something else in these engines." },
+        "refract.redos": { "type": "boolean", "default": true, "description": "Predict ReDoS." }
+      }
+    }
+  },
+  "scripts": { "test": "node test.js" }
+}
